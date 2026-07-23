@@ -1,0 +1,50 @@
+/* 🔤 นำเข้าฟอนต์ Prompt (สำหรับหัวข้อ) และ Sarabun (สำหรับเนื้อหาหลัก) */
+@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap');
+
+:root {
+    --font-heading: 'Prompt', sans-serif;
+    --font-body: 'Sarabun', sans-serif;
+    --psu-navy: #002855;
+    --psu-blue: #003566;
+    --psu-sky: #0284c7;
+    --bg-surface: #f8fafc;
+}
+
+body {
+    font-family: var(--font-body);
+    background-color: var(--bg-surface);
+    color: #1e293b;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* 🎯 กำหนดฟอนต์ Prompt สำหรับหัวข้อทั้งหมด */
+h1, h2, h3, h4, h5, h6, .font-heading {
+    font-family: var(--font-heading) !important;
+}
+
+/* 🎨 Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* 🎨 SweetAlert2 Custom Style */
+.swal2-popup {
+    font-family: var(--font-body) !important;
+    border-radius: 20px !important;
+}
+.swal2-title {
+    font-family: var(--font-heading) !important;
+}

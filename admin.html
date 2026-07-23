@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - CWIE Job Management System</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- Custom CSS & Config -->
+    <link rel="stylesheet" href="admin-style.css">
+    <script src="supabase-config.js"></script>
+</head>
+<body>
+
+    <!-- 🔐 SPLIT DESIGN LOGIN MODAL -->
+    <div id="login-modal" class="login-modal-overlay">
+        <div class="login-split-card">
+            <!-- Left Banner (PSU Branding) -->
+            <div class="login-banner-left">
+                <div>
+                    <div class="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center text-xl font-bold mb-6">
+                        🎓
+                    </div>
+                    <span class="text-xs font-semibold uppercase tracking-widest text-sky-300">PSU Surat Thani</span>
+                    <h2 class="text-2xl font-bold mt-2 leading-snug">CWIE Management Control Panel</h2>
+                </div>
+                <p class="text-xs text-slate-300 leading-relaxed mt-8">
+                    ระบบสารสนเทศหลังบ้านสำหรับจัดการประกาศรับสมัครงาน สหกิจศึกษา และทุนฝึกงาน มหาวิทยาลัยสงขลานครินทร์
+                </p>
+            </div>
+
+            <!-- Right Login Form -->
+            <div class="login-form-right">
+                <h3 class="login-title-main">ยินดีต้อนรับกลับมา 👋</h3>
+                <p class="login-subtitle-main">กรุณาระบุบัญชีแอดมินเพื่อเข้าสู่ระบบควบคุม</p>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1.5">อีเมลผู้ดูแลระบบ</label>
+                        <input type="email" id="admin-email" class="pastel-input" placeholder="admin@psu.ac.th">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1.5">รหัสผ่าน</label>
+                        <input type="password" id="admin-password" class="pastel-input" placeholder="••••••••">
+                    </div>
+                    
+                    <button id="btn-login" onclick="loginAdmin()" class="btn-login-submit">
+                        เข้าสู่ระบบ
+                    </button>
+                </div>
+                
+                <p id="login-error" class="login-error-msg">
+                    ❌ อีเมลหรือรหัสผ่านไม่ถูกต้อง
+                </p>
+
+                <div class="mt-6 text-center">
+                    <a href="index.html" class="text-xs text-slate-400 hover:text-sky-600 transition-colors">
+                        ← กลับไปยังหน้า Dashboard ผู้ใช้
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ⚙️ ADMIN CONTROL PANEL CONTAINER -->
+    <div class="admin-container">
+        
+        <!-- Header -->
+        <header class="admin-header">
+            <div>
+                <h1 class="admin-title">⚙️ Admin Control Panel</h1>
+                <span class="text-xs text-slate-400">ระบบจัดการประกาศงานและทุน CWIE PSU Surat Thani 2026</span>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="index.html" target="_blank" class="btn-dashboard">
+                    📊 เปิดหน้า Dashboard ↗
+                </a>
+                <button onclick="logoutAdmin()" id="btn-logout" class="btn-logout-styled" style="display: none;">
+                    🚪 ออกจากระบบ
+                </button>
+            </div>
+        </header>
+
+        <!-- 📊 Live Stats Bar -->
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="stat-icon-bg">📦</div>
+                <div>
+                    <div class="stat-label">ข้อมูลในระบบทั้งหมด</div>
+                    <div class="stat-val" id="stat-total-jobs">0 รายการ</div>
+                </div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-icon-bg">🕒</div>
+                <div>
+                    <div class="stat-label">อัปเดตข้อมูลล่าสุด</div>
+                    <div class="stat-val" id="stat-last-update" style="font-size: 15px; color: #0284c7;">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 1. ส่วนอัปโหลดไฟล์ Excel -->
+        <div class="admin-card">
+            <h2 class="card-title">นำเข้าข้อมูลประกาศงาน CWIE (.xlsx, .csv)</h2>
+            <div class="flex flex-col md:flex-row gap-3 items-center">
+                <input type="file" id="excel-file" accept=".xlsx, .csv" 
+                       title="เลือกไฟล์ Excel" aria-label="เลือกไฟล์ Excel"
+                       class="file-input w-full md:w-auto">
+                <button onclick="handleFileUpload()" class="btn-preview">
+                    1. พรีวิวข้อมูล (Preview)
+                </button>
+            </div>
+            <p class="upload-note">* รองรับไฟล์สรุปประกาศรับสมัครงาน CWIE 2026 โดยอัตโนมัติ</p>
+        </div>
+
+        <!-- 2. พรีวิวตารางข้อมูลก่อน Sync -->
+        <div class="admin-card" id="preview-section" style="display: none;">
+            <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+                <div class="flex items-center gap-2.5">
+                    <h2 class="card-title" style="margin-bottom: 0;">ตัวอย่างข้อมูลก่อนบันทึก</h2>
+                    <span id="preview-count-badge" class="badge-count">0 รายการ</span>
+                </div>
+                <button onclick="syncToDatabase()" id="btn-sync" class="btn-sync">
+                    2. บันทึกเข้าระบบ (Sync & Publish)
+                </button>
+            </div>
+
+            <div class="table-container">
+                <table class="preview-table">
+                    <thead>
+                        <tr>
+                            <th>บริษัท/หน่วยงาน</th>
+                            <th>ตำแหน่งงาน/ทุน</th>
+                            <th>สถานที่ปฏิบัติงาน</th>
+                            <th>เงินเดือน/เบี้ยเลี้ยง</th>
+                            <th>การติดต่อ/ช่องทางสมัคร</th>
+                            <th>สถานะ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="preview-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 3. ส่วนจัดการข้อมูลประกาศงานในระบบปัจจุบัน -->
+        <div class="admin-card">
+            <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+                <div>
+                    <h2 class="card-title" style="margin-bottom: 2px;">🗂️ ข้อมูลประกาศงานในระบบปัจจุบัน</h2>
+                    <span class="text-xs text-slate-400">รายการตำแหน่งงานที่กำลังเปิดแสดงอยู่บนหน้า Dashboard</span>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="openAddJobModal()" class="btn-sync" style="background: #0284c7; color: white;">
+                        ➕ เพิ่มงานใหม่ (Manual Add)
+                    </button>
+                    <button onclick="deleteAllJobs()" class="btn-danger-pastel">
+                        🚨 ล้างข้อมูลงานทั้งหมด
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="preview-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">ID</th>
+                            <th>บริษัท/หน่วยงาน</th>
+                            <th>ตำแหน่งงาน/ทุน</th>
+                            <th>สถานที่</th>
+                            <th>เงินเดือน/เบี้ยเลี้ยง</th>
+                            <th>สถานะ</th>
+                            <th style="width: 140px; text-align: center;">จัดการงาน</th>
+                        </tr>
+                    </thead>
+                    <tbody id="current-jobs-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 4. ส่วนจัดการประวัติการอัปโหลดข้อมูล -->
+        <div class="admin-card">
+            <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+                <div>
+                    <h2 class="card-title" style="margin-bottom: 2px;">📜 ประวัติการอัปโหลดข้อมูล (Upload History)</h2>
+                    <span class="text-xs text-slate-400">บันทึกย้อนหลังการอัปโหลดไฟล์เข้าระบบ</span>
+                </div>
+                <button onclick="clearUploadHistory()" class="btn-danger-pastel" style="background: #fef3c7; color: #d97706; border-color: #fde68a;">
+                    🧹 ล้างประวัติทั้งหมด
+                </button>
+            </div>
+
+            <div class="table-container">
+                <table class="preview-table">
+                    <thead>
+                        <tr>
+                            <th>วัน-เวลาที่อัปโหลด</th>
+                            <th>ชื่อไฟล์</th>
+                            <th>จำนวนรายการ</th>
+                            <th>ผู้ดำเนินการ</th>
+                            <th>สถานะ</th>
+                            <th style="width: 90px; text-align: center;">จัดการประวัติ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 📝 MODAL: ฟอร์มเพิ่ม/แก้ไขงานทีละรายการ -->
+    <div id="admin-job-modal" class="login-modal-overlay">
+        <div class="bg-white w-full max-w-lg rounded-2xl p-6 shadow-2xl border border-slate-100 text-left">
+            <h3 id="form-modal-title" class="text-lg font-bold text-slate-800 mb-4">➕ เพิ่มประกาศงานใหม่</h3>
+            
+            <input type="hidden" id="form-job-id">
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">บริษัท / หน่วยงาน *</label>
+                    <input type="text" id="form-company" class="pastel-input" placeholder="เช่น บริษัท เทคโซลูชัน จำกัด">
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">ตำแหน่งงาน / ทุน *</label>
+                    <input type="text" id="form-position" class="pastel-input" placeholder="เช่น Frontend Developer">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">สถานที่ปฏิบัติงาน</label>
+                        <input type="text" id="form-location" class="pastel-input" placeholder="เช่น สุราษฎร์ธานี">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">รูปแบบงาน</label>
+                        <select id="form-work-format" class="pastel-input">
+                            <option value="Onsite">Onsite</option>
+                            <option value="Hybrid">Hybrid</option>
+                            <option value="Remote / Online">Remote / Online</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">เงินเดือน / เบี้ยเลี้ยง</label>
+                        <input type="text" id="form-salary" class="pastel-input" placeholder="เช่น 300 บาท/วัน หรือ 15,000 บาท">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">จำนวนรับ (โควต้า)</label>
+                        <input type="text" id="form-quota" class="pastel-input" placeholder="เช่น 2 อัตรา">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">กำหนดการวันปิดรับ</label>
+                        <input type="text" id="form-deadline" class="pastel-input" placeholder="เช่น 31 ส.ค. 2026">
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">สถานะ</label>
+                        <select id="form-status" class="pastel-input">
+                            <option value="เปิดรับสมัครอยู่">🟢 เปิดรับสมัครอยู่</option>
+                            <option value="ปิดรับสมัครแล้ว">🔴 ปิดรับสมัครแล้ว</option>
+                        </select>
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-semibold text-slate-700 mb-1">ลิงก์สมัครงาน / ข้อมูลติดต่อ</label>
+                    <input type="text" id="form-contact" class="pastel-input" placeholder="เช่น https://form.gle/xxx หรือ hr@mail.com">
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 mt-6">
+                <button onclick="closeAdminJobModal()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs">
+                    ยกเลิก
+                </button>
+                <button onclick="saveJobManual()" class="btn-sync" style="margin: 0; background: #002855;">
+                    💾 บันทึกข้อมูล
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main JavaScript File -->
+    <script src="admin.js"></script>
+</body>
+</html>
