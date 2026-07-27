@@ -1,661 +1,632 @@
-// ==========================================
-// 💡 SweetAlert2 Helper Functions
-// ==========================================
+let globalJobsList = [];
 
-function showSuccessAlert(title, text) {
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            icon: 'success',
-            title: title,
-            text: text,
-            confirmButtonText: 'ตกลง',
-            confirmButtonColor: '#10b981',
-            timer: 2200,
-            timerProgressBar: true
-        });
-    } else {
-        alert(`${title}\n${text}`);
-    }
+document.addEventListener('DOMContentLoaded', () => {
+    checkAuthSession();
+});
+
+// 🔒 helper: กัน XSS — แปลงข้อความให้ปลอดภัยก่อนแทรกลงใน innerHTML
+function escapeHtml(str) {
+    if (str === null || str === undefined) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
-function showErrorAlert(title, text) {
-    if (typeof Swal !== 'undefined') {
-        Swal.fire({
-            icon: 'error',
-            title: title,
-            text: text,
-            confirmButtonText: 'ตกลง',
-            confirmButtonColor: '#ef4444'
-        });
-    } else {
-        alert(`${title}\n${text}`);
+async function checkAuthSession() {
+    const loginModal = document.getElementById('login-modal');
+    const panel = document.getElementById('admin-panel-container');
+    const btnLogout = document.getElementById('btn-logout');
+
+    if (typeof supabaseClient === 'undefined') {
+        // ไม่มีการเชื่อมต่อ Supabase เลย — ปลอดภัยไว้ก่อน ไม่แสดงพาเนล
+        if (loginModal) loginModal.style.display = 'flex';
+        if (panel) panel.style.display = 'none';
+        return;
+    }
+
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+
+        if (session) {
+            // ✅ ล็อกอินแล้ว: ซ่อน modal, แสดงพาเนล, โหลดข้อมูล
+            if (loginModal) loginModal.style.display = 'none';
+            if (panel) panel.style.display = 'block';
+            if (btnLogout) btnLogout.style.display = 'inline-flex';
+
+            fetchCurrentJobs();
+            loadUploadHistory();
+        } else {
+            // 🔐 ยังไม่ล็อกอิน: บังคับแสดง modal และซ่อนพาเนลทั้งหมด
+            if (loginModal) loginModal.style.display = 'flex';
+            if (panel) panel.style.display = 'none';
+            if (btnLogout) btnLogout.style.display = 'none';
+        }
+    } catch (err) {
+        console.warn("Auth Check Warning:", err);
+        // เกิดข้อผิดพลาดในการตรวจสอบ session — ปลอดภัยไว้ก่อน บังคับให้ล็อกอินใหม่
+        if (loginModal) loginModal.style.display = 'flex';
+        if (panel) panel.style.display = 'none';
     }
 }
-
-
-// ==========================================
-// 1. ระบบยืนยันตัวตน (Authentication)
-// ==========================================
 
 async function loginAdmin() {
-    const emailInput = document.getElementById('admin-email');
-    const passwordInput = document.getElementById('admin-password');
-    const errorText = document.getElementById('login-error');
-    const btnLogin = document.getElementById('btn-login');
-
-    const email = emailInput ? emailInput.value.trim() : '';
-    const password = passwordInput ? passwordInput.value.trim() : '';
+    if (typeof supabaseClient === 'undefined') return;
+    const email = document.getElementById('admin-email')?.value.trim();
+    const password = document.getElementById('admin-password')?.value.trim();
+    const errorEl = document.getElementById('login-error');
 
     if (!email || !password) {
-        if (errorText) {
-            errorText.innerText = "❌ กรุณากรอกอีเมลและรหัสผ่านให้ครบถ้วน";
-            errorText.style.display = 'block';
+        if (errorEl) {
+            errorEl.innerText = '❌ กรุณากรอกอีเมลและรหัสผ่านให้ครบถ้วน';
+            errorEl.style.display = 'block';
         }
         return;
     }
 
-    if (btnLogin) btnLogin.innerText = "กำลังตรวจสอบ...";
-
     try {
-        const { data, error } = await supabaseClient.auth.signInWithPassword({
-            email: email,
-            password: password
-        });
+        const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) throw error;
 
-        if (error) {
-            console.error("Login Error:", error.message);
-            if (errorText) {
-                errorText.innerText = "❌ อีเมลหรือรหัสผ่านไม่ถูกต้อง";
-                errorText.style.display = 'block';
-            }
-            if (btnLogin) btnLogin.innerText = "เข้าสู่ระบบ";
-        } else {
-            const modal = document.getElementById('login-modal');
-            const btnLogout = document.getElementById('btn-logout');
-            if (modal) modal.style.display = 'none';
-            if (btnLogout) btnLogout.style.display = 'inline-block';
-            
-            loadSystemStats();
-            fetchCurrentJobs();
-            loadUploadHistory();
-        }
+        Swal.fire({
+            icon: 'success',
+            title: 'เข้าสู่ระบบสำเร็จ!',
+            timer: 1200,
+            showConfirmButton: false
+        });
+        setTimeout(() => { location.reload(); }, 1200);
     } catch (err) {
-        console.error("System Error:", err);
-        if (errorText) {
-            errorText.innerText = "❌ เกิดข้อผิดพลาดในการเชื่อมต่อ";
-            errorText.style.display = 'block';
+        if (errorEl) {
+            errorEl.innerText = `❌ ${err.message}`;
+            errorEl.style.display = 'block';
         }
-        if (btnLogin) btnLogin.innerText = "เข้าสู่ระบบ";
     }
 }
 
 async function logoutAdmin() {
-    if (typeof supabaseClient !== 'undefined' && supabaseClient.auth) {
+    if (typeof supabaseClient !== 'undefined') {
         await supabaseClient.auth.signOut();
-        location.reload();
     }
-}
-
-document.addEventListener('DOMContentLoaded', async () => {
-    const passwordInput = document.getElementById('admin-password');
-    if (passwordInput) {
-        passwordInput.addEventListener('keyup', (e) => {
-            if (e.key === 'Enter') loginAdmin();
-        });
-    }
-
-    const modal = document.getElementById('login-modal');
-    const btnLogout = document.getElementById('btn-logout');
-
-    if (typeof supabaseClient !== 'undefined' && supabaseClient.auth) {
-        const { data: { session } } = await supabaseClient.auth.getSession();
-        
-        if (!session) {
-            if (modal) modal.style.display = 'flex';
-            if (btnLogout) btnLogout.style.display = 'none';
-        } else {
-            if (modal) modal.style.display = 'none';
-            if (btnLogout) btnLogout.style.display = 'inline-block';
-            
-            loadSystemStats();
-            fetchCurrentJobs();
-            loadUploadHistory();
-        }
-    } else {
-        if (modal) modal.style.display = 'flex';
-    }
-});
-
-
-// ==========================================
-// 2. ระบบจัดการประกาศงาน (cwie_jobs)
-// ==========================================
-
-let currentJobsCache = [];
-
-async function loadSystemStats() {
-    try {
-        const { count, error } = await supabaseClient
-            .from('cwie_jobs')
-            .select('*', { count: 'exact', head: true });
-
-        const totalElement = document.getElementById('stat-total-jobs');
-        if (totalElement) {
-            totalElement.innerText = (error || count === null) ? '0 รายการ' : `${count.toLocaleString()} รายการ`;
-        }
-    } catch (e) {
-        console.warn("Stats Load Error:", e);
-    }
+    location.reload();
 }
 
 async function fetchCurrentJobs() {
     const tbody = document.getElementById('current-jobs-body');
+    const totalCountEl = document.getElementById('stat-total-jobs');
+    const lastUpdateEl = document.getElementById('stat-last-update');
+
     if (!tbody) return;
 
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #8a99ad; padding: 20px;">🔄 กำลังโหลดข้อมูลในระบบ...</td></tr>`;
-
     try {
+        if (typeof supabaseClient === 'undefined') {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-amber-600">⚠️ ยังไม่ได้เชื่อมต่อ Supabase</td></tr>`;
+            return;
+        }
+
         const { data, error } = await supabaseClient
             .from('cwie_jobs')
             .select('*')
             .order('id', { ascending: true });
 
         if (error) throw error;
+        globalJobsList = data || [];
 
-        currentJobsCache = data || [];
-        tbody.innerHTML = '';
-        if (currentJobsCache.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #8a99ad; padding: 20px;">📭 ไม่มีข้อมูลประกาศงานในระบบในขณะนี้</td></tr>`;
+        if (totalCountEl) totalCountEl.innerText = `${globalJobsList.length} รายการ`;
+        if (globalJobsList.length > 0 && lastUpdateEl) {
+            lastUpdateEl.innerText = new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+
+        if (globalJobsList.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-slate-400">📭 ไม่พบข้อมูลในระบบ</td></tr>`;
             return;
         }
 
-        currentJobsCache.forEach(job => {
-            const tr = document.createElement('tr');
-            const isClosed = job.status && (job.status.includes('ปิด') || job.status.includes('หมด'));
+        tbody.innerHTML = '';
+        globalJobsList.forEach(job => {
+            const isClosed = job.status === 'ปิดรับสมัครแล้ว' || job.status === 'ปิดรับสมัคร' || job.status === 'ปิด';
             const statusBadge = isClosed
-                ? `<span style="background: #fee2e2; color: #dc2626; padding: 3px 8px; border-radius: 12px; font-size: 11.5px; font-weight: 600;">🔴 ปิดรับ</span>`
-                : `<span style="background: #dcfce7; color: #15803d; padding: 3px 8px; border-radius: 12px; font-size: 11.5px; font-weight: 600;">🟢 เปิดรับ</span>`;
+                ? `<span style="background: #fee2e2; color: #dc2626; padding: 3px 8px; border-radius: 12px; font-weight: 600; white-space: nowrap;">🔴 ปิดรับสมัคร</span>`
+                : `<span style="background: #dcfce7; color: #15803d; padding: 3px 8px; border-radius: 12px; font-weight: 600; white-space: nowrap;">🟢 เปิดรับสมัคร</span>`;
 
+            const tr = document.createElement('tr');
+            // 🔒 ใช้ escapeHtml กับข้อมูลทุกช่องที่มาจากผู้ใช้/ไฟล์ที่อัปโหลด
             tr.innerHTML = `
-                <td style="color: #8a99ad; font-size: 12px; font-weight: 500;">#${job.id}</td>
-                <td style="font-weight: 600; color: #1e293b;">${job.company_name || '-'}</td>
-                <td style="color: #0284c7; font-weight: 500;">${job.position_title || '-'}</td>
-                <td style="color: #475569;">${job.location || '-'}</td>
-                <td style="color: #059669; font-weight: 600;">${job.salary || 'ไม่ระบุ'}</td>
+                <td style="font-weight: 600;">${escapeHtml(job.id)}</td>
+                <td><b>${escapeHtml(job.company_name) || '-'}</b></td>
+                <td style="color: #003566; font-weight: 500;">${escapeHtml(job.position_title) || '-'}</td>
+                <td>${escapeHtml(job.location) || '-'}</td>
+                <td style="color: #059669; font-weight: 600;">${escapeHtml(job.salary) || 'ไม่ระบุ'}</td>
                 <td>${statusBadge}</td>
-                <td style="text-align: center; display: flex; gap: 4px; justify-content: center;">
-                    <button onclick="openEditJobModal(${job.id})" class="btn-delete-sm" style="background: #e0f2fe; color: #0284c7;" title="แก้ไข">
-                        ✏️ แก้ไข
-                    </button>
-                    <button onclick="deleteSingleJob(${job.id}, '${(job.position_title || '').replace(/'/g, "\\'")}')" class="btn-delete-sm" title="ลบงานนี้">
-                        🗑️ ลบ
-                    </button>
+                <td style="text-align: center; white-space: nowrap;">
+                    <button onclick="openEditJobModalById('${escapeHtml(job.id)}')" class="px-2 py-1 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 font-medium text-xs">✏️ แก้ไข</button>
+                    <button onclick="deleteJob('${escapeHtml(job.id)}')" class="px-2 py-1 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 font-medium text-xs">🗑️ ลบ</button>
                 </td>
             `;
             tbody.appendChild(tr);
         });
     } catch (err) {
-        console.error("Fetch Jobs Error:", err);
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: #ef4444; padding: 20px;">เกิดข้อผิดพลาดในการโหลดข้อมูล: ${err.message}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-rose-500">เกิดข้อผิดพลาด: ${escapeHtml(err.message)}</td></tr>`;
     }
 }
 
 function openAddJobModal() {
-    document.getElementById('form-job-id').value = '';
-    document.getElementById('form-modal-title').innerText = '➕ เพิ่มประกาศงานใหม่';
-    document.getElementById('form-company').value = '';
-    document.getElementById('form-position').value = '';
-    document.getElementById('form-location').value = '';
-    document.getElementById('form-work-format').value = 'Onsite';
-    document.getElementById('form-salary').value = '';
-    document.getElementById('form-quota').value = '';
-    document.getElementById('form-status').value = 'เปิดรับสมัครอยู่';
-    document.getElementById('form-deadline').value = '';
-    document.getElementById('form-contact').value = '';
+    const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+    
+    setVal('form-job-id', '');
+    const titleEl = document.getElementById('form-modal-title');
+    if (titleEl) titleEl.innerText = '➕ เพิ่มประกาศงานใหม่';
+    
+    setVal('form-company', '');
+    setVal('form-position', '');
+    setVal('form-location', '');
+    setVal('form-work-format', 'Onsite');
+    setVal('form-salary', '');
+    setVal('form-quota', '');
+    setVal('form-job-type', 'สหกิจศึกษา');
+    setVal('form-status', 'เปิดรับสมัครอยู่');
+    setVal('form-contact', '');
 
     const modal = document.getElementById('admin-job-modal');
-    if (modal) modal.style.display = 'flex';
+    if (modal) {
+        modal.style.display = 'flex';
+    }
 }
 
-function openEditJobModal(id) {
-    const job = currentJobsCache.find(j => j.id === id);
-    if (!job) return;
+function openEditJobModalById(id) {
+    // เทียบแบบ string เพื่อรองรับทั้ง id ที่เป็นตัวเลข (int/bigint) และ UUID
+    const job = globalJobsList.find(j => String(j.id) === String(id));
+    if (!job) {
+        console.warn('ไม่พบรายการงานที่มี id:', id);
+        return;
+    }
 
-    document.getElementById('form-job-id').value = job.id;
-    document.getElementById('form-modal-title').innerText = `✏️ แก้ไขประกาศงาน (#${job.id})`;
-    document.getElementById('form-company').value = job.company_name || '';
-    document.getElementById('form-position').value = job.position_title || '';
-    document.getElementById('form-location').value = job.location || '';
-    document.getElementById('form-work-format').value = job.work_format || 'Onsite';
-    document.getElementById('form-salary').value = job.salary || '';
-    document.getElementById('form-quota').value = job.quota || '';
-    document.getElementById('form-status').value = job.status || 'เปิดรับสมัครอยู่';
-    document.getElementById('form-deadline').value = job.deadline || '';
-    document.getElementById('form-contact').value = job.contact_info || job.application_channel || '';
+    const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+
+    setVal('form-job-id', job.id);
+    const titleEl = document.getElementById('form-modal-title');
+    if (titleEl) titleEl.innerText = '✏️ แก้ไขประกาศงาน';
+
+    setVal('form-company', job.company_name || '');
+    setVal('form-position', job.position_title || '');
+    setVal('form-location', job.location || '');
+    setVal('form-work-format', job.work_format || 'Onsite');
+    setVal('form-salary', job.salary || '');
+    setVal('form-quota', job.quota || '');
+    setVal('form-job-type', job.job_type || 'สหกิจศึกษา');
+    setVal('form-status', job.status || 'เปิดรับสมัครอยู่');
+    setVal('form-contact', job.application_channel || job.contact_info || '');
 
     const modal = document.getElementById('admin-job-modal');
-    if (modal) modal.style.display = 'flex';
+    if (modal) {
+        modal.style.display = 'flex';
+    }
 }
 
 function closeAdminJobModal() {
     const modal = document.getElementById('admin-job-modal');
-    if (modal) modal.style.display = 'none';
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// 🔧 ดึงอีเมลของแอดมินที่ล็อกอินอยู่ (ใช้ร่วมกันทั้งตอนอัปโหลด Excel และเพิ่ม/แก้ไขงานด้วยมือ)
+async function getCurrentUserEmail() {
+    try {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session && session.user && session.user.email) {
+            return session.user.email;
+        }
+    } catch (e) {
+        console.warn("User Session Error:", e);
+    }
+    return 'Admin';
+}
+
+// 🔧 บันทึกรายการลงประวัติ (ใช้ร่วมกันทั้งอัปโหลด Excel และเพิ่ม/แก้ไขงานด้วยมือ)
+async function logHistoryEntry(filename, recordCount) {
+    try {
+        const currentUserEmail = await getCurrentUserEmail();
+        const { error } = await supabaseClient.from('cwie_logs').insert([{
+            filename,
+            record_count: recordCount,
+            uploaded_by: currentUserEmail,
+            uploaded_at: new Date().toISOString()
+        }]);
+        if (error) {
+            console.warn("Log Record Warning:", error.message);
+            return false;
+        }
+        return true;
+    } catch (e) {
+        console.warn("Log Record Warning:", e.message);
+        return false;
+    }
 }
 
 async function saveJobManual() {
-    const id = document.getElementById('form-job-id').value;
-    const company_name = document.getElementById('form-company').value.trim();
-    const position_title = document.getElementById('form-position').value.trim();
-    const location = document.getElementById('form-location').value.trim();
-    const work_format = document.getElementById('form-work-format').value;
-    const salary = document.getElementById('form-salary').value.trim();
-    const quota = document.getElementById('form-quota').value.trim();
-    const status = document.getElementById('form-status').value;
-    const deadline = document.getElementById('form-deadline').value.trim();
-    const contact_info = document.getElementById('form-contact').value.trim();
+    const getVal = (id) => document.getElementById(id)?.value?.trim() || '';
 
-    if (!company_name || !position_title) {
-        showErrorAlert("ข้อมูลไม่ครบถ้วน", "กรุณากรอกชื่อบริษัท และ ตำแหน่งงาน ครับ");
+    const jobId = getVal('form-job-id');
+    const company = getVal('form-company');
+    const position = getVal('form-position');
+
+    if (!company || !position) {
+        Swal.fire('แจ้งเตือน', 'กรุณากรอกชื่อบริษัทและตำแหน่งงานให้ครบถ้วน', 'warning');
         return;
     }
 
     const payload = {
-        company_name,
-        position_title,
-        location: location || '-',
-        work_format: work_format || 'Onsite',
-        salary: salary || 'ไม่ระบุ',
-        quota: quota || 'ไม่ระบุ',
-        status,
-        deadline: deadline || 'ไม่ระบุ',
-        contact_info: contact_info || '-',
-        application_channel: contact_info || '-'
+        company_name: company,
+        position_title: position,
+        location: getVal('form-location') || '-',
+        work_format: getVal('form-work-format') || 'Onsite',
+        salary: getVal('form-salary') || 'ไม่ระบุ',
+        quota: getVal('form-quota') || 'ไม่ระบุ',
+        job_type: getVal('form-job-type') || 'สหกิจศึกษา',
+        status: getVal('form-status') || 'เปิดรับสมัครอยู่',
+        application_channel: getVal('form-contact'),
+        contact_info: getVal('form-contact')
     };
 
     try {
         let error;
-        if (id) {
-            const res = await supabaseClient.from('cwie_jobs').update(payload).eq('id', id);
+        const isEdit = !!jobId;
+        if (isEdit) {
+            const res = await supabaseClient.from('cwie_jobs').update(payload).eq('id', jobId);
             error = res.error;
         } else {
             const res = await supabaseClient.from('cwie_jobs').insert([payload]);
             error = res.error;
         }
 
-        if (error) {
-            showErrorAlert("เกิดข้อผิดพลาดในการบันทึก", error.message);
+        if (error) throw error;
+
+        // 🔧 บันทึกลงประวัติด้วย เพื่อให้เห็นการเพิ่ม/แก้ไขด้วยมือในตารางประวัติเดียวกัน
+        const logLabel = isEdit
+            ? `✏️ แก้ไขงานด้วยตนเอง: ${company} - ${position}`
+            : `➕ เพิ่มงานด้วยตนเอง: ${company} - ${position}`;
+        const logOk = await logHistoryEntry(logLabel, 1);
+
+        closeAdminJobModal();
+        if (logOk) {
+            Swal.fire({
+                icon: 'success',
+                title: 'บันทึกข้อมูลสำเร็จ!',
+                timer: 1500,
+                showConfirmButton: false
+            });
         } else {
-            showSuccessAlert("บันทึกสำเร็จ! ", "บันทึกข้อมูลประกาศงานเรียบร้อยแล้ว");
-            closeAdminJobModal();
-            fetchCurrentJobs();
-            loadSystemStats();
+            Swal.fire({
+                icon: 'warning',
+                title: 'บันทึกข้อมูลงานสำเร็จ แต่บันทึกประวัติล้มเหลว',
+                text: 'ข้อมูลงานถูกบันทึกเรียบร้อยแล้ว แต่ไม่สามารถบันทึกลงประวัติได้',
+            });
         }
+        fetchCurrentJobs();
+        loadUploadHistory();
     } catch (err) {
-        showErrorAlert("เกิดข้อผิดพลาด", err.message);
+        Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
     }
 }
 
-async function deleteSingleJob(id, title) {
+async function deleteJob(id) {
     const result = await Swal.fire({
-        title: 'ยืนยันการลบงาน?',
-        text: `คุณต้องการลบงาน "${title}" (ID: #${id}) ออกจากระบบใช่หรือไม่?`,
+        title: 'ยืนยันการลบ?',
+        text: 'ต้องการลบประกาศงานนี้ออกจากระบบใช่หรือไม่',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonText: ' ลบข้อมูล',
+        confirmButtonText: 'ลบ',
         cancelButtonText: 'ยกเลิก',
-        confirmButtonColor: '#ef4444',
-        cancelButtonColor: '#94a3b8'
+        confirmButtonColor: '#e11d48'
     });
 
-    if (!result.isConfirmed) return;
-
-    try {
-        const { error } = await supabaseClient.from('cwie_jobs').delete().eq('id', id);
-
-        if (error) {
-            showErrorAlert("เกิดข้อผิดพลาดในการลบงาน", error.message);
-        } else {
-            showSuccessAlert("ลบสำเร็จ!", "ลบรายการประกาศงานเรียบร้อยแล้ว");
+    if (result.isConfirmed) {
+        try {
+            const { error } = await supabaseClient.from('cwie_jobs').delete().eq('id', id);
+            if (error) throw error;
+            Swal.fire({ icon: 'success', title: 'ลบสำเร็จ', timer: 1000, showConfirmButton: false });
             fetchCurrentJobs();
-            loadSystemStats();
+        } catch (err) {
+            Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
         }
-    } catch (err) {
-        showErrorAlert("เกิดข้อผิดพลาด", err.message);
     }
 }
 
 async function deleteAllJobs() {
+    // 🔒 action ทำลายล้าง — ต้องพิมพ์ยืนยันคำว่า "ลบทั้งหมด" ก่อน ป้องกันกดพลาด
     const result = await Swal.fire({
-        title: '🚨 ล้างข้อมูลงานทั้งหมด?',
-        text: 'รายการประกาศงานทั้งหมดบน Dashboard จะถูกลบทิ้ง (ประวัติการอัปโหลดจะยังคงอยู่)',
+        title: '⚠️ ล้างข้อมูลทั้งหมด?',
+        html: 'ข้อมูลประกาศงานทั้งหมดจะถูกลบออกจากระบบอย่างถาวร!<br>พิมพ์ <b>ลบทั้งหมด</b> เพื่อยืนยัน',
         icon: 'warning',
+        input: 'text',
+        inputPlaceholder: 'พิมพ์ "ลบทั้งหมด" ที่นี่',
         showCancelButton: true,
-        confirmButtonText: 'ใช่, ล้างทั้งหมด',
+        confirmButtonText: 'ล้างทั้งหมด',
         cancelButtonText: 'ยกเลิก',
-        confirmButtonColor: '#ef4444',
-        cancelButtonColor: '#94a3b8'
-    });
-
-    if (!result.isConfirmed) return;
-
-    try {
-        const { error } = await supabaseClient.from('cwie_jobs').delete().neq('id', 0);
-
-        if (error) {
-            showErrorAlert("เกิดข้อผิดพลาดในการล้างข้อมูล", error.message);
-        } else {
-            showSuccessAlert("ล้างข้อมูลเรียบร้อย!", "ข้อมูลประกาศงานทั้งหมดถูกลบออกจากระบบแล้ว");
-            fetchCurrentJobs();
-            loadSystemStats();
-        }
-    } catch (err) {
-        showErrorAlert("เกิดข้อผิดพลาด", err.message);
-    }
-}
-
-
-// ==========================================
-// 3. ระบบประวัติการอัปโหลด (cwie_logs)
-// ==========================================
-
-async function loadUploadHistory() {
-    const tbody = document.getElementById('history-body');
-    const lastUpdateEl = document.getElementById('stat-last-update');
-    if (!tbody) return;
-
-    try {
-        const { data, error } = await supabaseClient
-            .from('cwie_logs')
-            .select('*')
-            .order('id', { ascending: false })
-            .limit(10);
-
-        if (error) throw error;
-
-        if (data && data.length > 0) {
-            const lastTime = new Date(data[0].uploaded_at);
-            if (lastUpdateEl) {
-                lastUpdateEl.innerText = lastTime.toLocaleDateString('th-TH') + ' ' + lastTime.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+        confirmButtonColor: '#dc2626',
+        preConfirm: (value) => {
+            if (value !== 'ลบทั้งหมด') {
+                Swal.showValidationMessage('กรุณาพิมพ์ข้อความให้ตรงกับที่กำหนดเพื่อยืนยัน');
+                return false;
             }
-        } else if (lastUpdateEl) {
-            lastUpdateEl.innerText = 'ยังไม่มีการอัปโหลด';
+            return true;
         }
-
-        tbody.innerHTML = '';
-        if (!data || data.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #8a99ad; padding: 16px;">ยังไม่มีประวัติการอัปโหลดในระบบ</td></tr>`;
-            return;
-        }
-
-        data.forEach(log => {
-            const tr = document.createElement('tr');
-            const logDate = new Date(log.uploaded_at);
-            const timeStr = logDate.toLocaleDateString('th-TH') + ' ' + logDate.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-
-            tr.innerHTML = `
-                <td>${timeStr}</td>
-                <td style="font-weight: 600; color: #0284c7;">📄 ${log.filename || 'ไฟล์อัปโหลด'}</td>
-                <td><span class="badge-count">${log.record_count} รายการ</span></td>
-                <td>${log.uploaded_by || 'Admin'}</td>
-                <td><span style="color: #10b981; font-weight: 600;">✅ สำเร็จ (Published)</span></td>
-                <td style="text-align: center;">
-                    <button onclick="deleteSingleLog(${log.id}, '${(log.filename || 'ไฟล์อัปโหลด').replace(/'/g, "\\'")}')" class="btn-delete-sm" title="ลบประวัตินี้">
-                        🗑️ ลบ
-                    </button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
-    } catch (err) {
-        console.warn("History Load Error:", err.message);
-        if (tbody) tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: #8a99ad; padding: 16px;">ยังไม่มีประวัติ หรือ กรุณาสร้างตาราง cwie_logs บน Supabase</td></tr>`;
-    }
-}
-
-async function saveUploadLog(filename, recordCount) {
-    try {
-        const userRes = await supabaseClient.auth.getUser();
-        const userEmail = userRes?.data?.user?.email || 'Admin';
-
-        await supabaseClient.from('cwie_logs').insert([{
-            filename: filename || 'ไฟล์อัปโหลด.xlsx',
-            record_count: recordCount,
-            uploaded_by: userEmail
-        }]);
-
-        loadUploadHistory();
-    } catch (err) {
-        console.error("Save Log Error:", err);
-    }
-}
-
-async function deleteSingleLog(id, filename) {
-    const result = await Swal.fire({
-        title: 'ยืนยันการลบประวัติ?',
-        text: `คุณต้องการลบประวัติการอัปโหลด "${filename}" (ID: #${id}) ใช่หรือไม่?`,
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: ' ลบประวัติ',
-        cancelButtonText: 'ยกเลิก',
-        confirmButtonColor: '#ef4444',
-        cancelButtonColor: '#94a3b8'
     });
 
-    if (!result.isConfirmed) return;
-
-    try {
-        const { error } = await supabaseClient.from('cwie_logs').delete().eq('id', id);
-
-        if (error) {
-            showErrorAlert("เกิดข้อผิดพลาดในการลบประวัติ", error.message);
-        } else {
-            showSuccessAlert("ลบสำเร็จ!", "ลบประวัติการอัปโหลดเรียบร้อยแล้ว");
-            loadUploadHistory();
+    if (result.isConfirmed) {
+        try {
+            const { error } = await supabaseClient.from('cwie_jobs').delete().neq('id', 0);
+            if (error) throw error;
+            Swal.fire({ icon: 'success', title: 'ล้างข้อมูลสำเร็จ', timer: 1200, showConfirmButton: false });
+            fetchCurrentJobs();
+        } catch (err) {
+            Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
         }
-    } catch (err) {
-        showErrorAlert("เกิดข้อผิดพลาด", err.message);
     }
 }
-
-async function clearUploadHistory() {
-    const result = await Swal.fire({
-        title: ' ล้างประวัติการอัปโหลดทั้งหมด?',
-        text: 'ประวัติการอัปโหลดย้อนหลังจะถูกลบทิ้ง (ประกาศงานบน Dashboard จะยังคงอยู่)',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'ใช่, ล้างประวัติทั้งหมด',
-        cancelButtonText: 'ยกเลิก',
-        confirmButtonColor: '#f59e0b',
-        cancelButtonColor: '#94a3b8'
-    });
-
-    if (!result.isConfirmed) return;
-
-    try {
-        const { error } = await supabaseClient.from('cwie_logs').delete().neq('id', 0);
-
-        if (error) {
-            showErrorAlert("เกิดข้อผิดพลาดในการล้างประวัติ", error.message);
-        } else {
-            showSuccessAlert("ล้างประวัติเรียบร้อย!", "ประวัติการอัปโหลดทั้งหมดถูกลบออกจากระบบแล้ว");
-            loadUploadHistory();
-        }
-    } catch (err) {
-        showErrorAlert("เกิดข้อผิดพลาด", err.message);
-    }
-}
-
-
-// ==========================================
-// 4. ระบบอ่านไฟล์ Excel & Status Detect
-// ==========================================
 
 let parsedExcelData = [];
 let uploadedFileName = '';
 
-function getRowValue(row, keywords, fallback = '-') {
-    if (!row) return fallback;
-    const keys = Object.keys(row);
-    
-    for (let keyword of keywords) {
-        if (row[keyword] !== undefined && row[keyword] !== null && String(row[keyword]).trim() !== '') {
-            return String(row[keyword]).trim();
-        }
-        
-        const matchedKey = keys.find(k => String(k).toLowerCase().includes(keyword.toLowerCase()));
-        if (matchedKey && row[matchedKey] !== undefined && row[matchedKey] !== null && String(row[matchedKey]).trim() !== '') {
-            return String(row[matchedKey]).trim();
-        }
-    }
-    return fallback;
-}
+// 🔧 ตำแหน่งคอลัมน์ในไฟล์ Excel (นับจาก 0 = คอลัมน์ A, 1 = คอลัมน์ B, 2 = คอลัมน์ C, ...)
+// แถวแรกของไฟล์ต้องเป็นหัวตาราง (header) แล้วข้อมูลเริ่มจากแถวที่ 2 เป็นต้นไป
+// โครงสร้างนี้ตรงกับไฟล์เทมเพลต Cwie-2026.xlsx:
+// A=ลำดับ(ไม่ใช้), B=บริษัท, C=ตำแหน่ง, D=จำนวนที่รับ, E=คุณสมบัติ(ไม่ใช้), F=ลักษณะงาน(ไม่ใช้),
+// G=สถานที่, H=รูปแบบงาน, I=ค่าตอบแทน, J=ระยะเวลา(ไม่ใช้), K=วันปิดรับสมัคร, L=สถานะประกาศ,
+// M=ช่องทางสมัคร, N=ผู้ติดต่อ, O=แหล่งที่มา(ไม่ใช้), P=วันที่ดึงข้อมูล(ไม่ใช้), Q=ข้อสังเกต(ไม่ใช้)
+// ถ้าเทมเพลตไฟล์เปลี่ยน แก้เลขคอลัมน์ตรงนี้ที่เดียวพอ
+const EXCEL_COLUMNS = {
+    company_name: 1,          // คอลัมน์ B — ชื่อบริษัท/หน่วยงาน
+    position_title: 2,        // คอลัมน์ C — ตำแหน่งงาน/ทุนที่รับสมัคร
+    quota: 3,                  // คอลัมน์ D — จำนวนที่รับ (อัตรา)
+    location: 6,               // คอลัมน์ G — สถานที่ปฏิบัติงาน
+    work_format: 7,            // คอลัมน์ H — รูปแบบงาน
+    salary: 8,                 // คอลัมน์ I — ค่าตอบแทน/สวัสดิการ
+    deadline: 10,               // คอลัมน์ K — วันปิดรับสมัคร
+    status: 11,                 // คอลัมน์ L — สถานะประกาศ
+    application_channel: 12,   // คอลัมน์ M — ช่องทางการสมัคร
+    contact_info: 13           // คอลัมน์ N — ผู้ติดต่อ/เบอร์โทร/อีเมล
+};
 
-function parseStatus(rawValue) {
-    if (!rawValue || rawValue === '-' || rawValue === 'ไม่ระบุ') return 'เปิดรับสมัครอยู่';
-    const str = String(rawValue).trim().toLowerCase();
-    
-    if (str.includes('ปิด') || str.includes('หมด') || str.includes('เต็ม') || str.includes('close') || str.includes('expire')) {
-        return 'ปิดรับสมัครแล้ว';
-    }
-    if (str.includes('เปิด') || str.includes('open') || str.includes('active') || str.includes('รับ')) {
+// ค่าที่พบได้บ่อยในไฟล์ที่หมายถึง "ปิดรับสมัครแล้ว" — ใช้จับคู่แบบไม่สนตัวพิมพ์เล็ก/ใหญ่
+const CLOSED_STATUS_VALUES = ['ปิดรับสมัครแล้ว', 'ปิดรับสมัคร', 'ปิด', 'closed', 'close'];
+
+function normalizeStatusValue(raw) {
+    const val = String(raw || '').trim();
+    if (!val) return 'เปิดรับสมัครอยู่';
+    const normalized = val.toLowerCase();
+    // 🔧 ต้องเช็คคำว่า "เปิด" (คำเต็ม) ก่อนเสมอ เพราะคำว่า "ปิด" เป็นส่วนหนึ่งของคำว่า
+    // "เปิด" อยู่แล้ว (เ + ปิด) ถ้าเช็คแค่ "ปิด" อย่างเดียวจะจับ "เปิดรับสมัครอยู่" ผิดว่าปิดไปด้วย
+    if (normalized.includes('เปิด') || normalized.includes('open')) {
         return 'เปิดรับสมัครอยู่';
     }
-    
-    return rawValue;
+    const isClosed = CLOSED_STATUS_VALUES.some(c => normalized.includes(c.toLowerCase()));
+    return isClosed ? 'ปิดรับสมัครแล้ว' : 'เปิดรับสมัครอยู่';
 }
 
-function handleFileUpload() {
+async function handleFileUpload() {
     const fileInput = document.getElementById('excel-file');
-    const file = fileInput ? fileInput.files[0] : null;
-
-    if (!file) {
-        showErrorAlert("กรุณาเลือกไฟล์", "กรุณาเลือกไฟล์ Excel (.xlsx, .csv) ");
+    if (!fileInput.files || fileInput.files.length === 0) {
+        Swal.fire('แจ้งเตือน', 'กรุณาเลือกไฟล์ Excel (.xlsx หรือ .csv) ก่อน', 'warning');
         return;
     }
-
+    const file = fileInput.files[0];
     uploadedFileName = file.name;
-
     const reader = new FileReader();
-    reader.onload = function(e) {
+
+    reader.onload = async function (e) {
         try {
             const data = new Uint8Array(e.target.result);
             const workbook = XLSX.read(data, { type: 'array' });
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
-            const jsonData = XLSX.utils.sheet_to_json(worksheet);
+            const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-            if (jsonData.length === 0) {
-                showErrorAlert("ไฟล์ว่างเปล่า", "ไม่พบข้อมูลในไฟล์ Excel ");
+            if (json.length < 2) {
+                Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูลในไฟล์ Excel หรือไฟล์ว่างเปล่า', 'warning');
                 return;
             }
 
-           parsedExcelData = jsonData.map(row => {
-    const rawStatus = getRowValue(row, ['สถานะ', 'status', 'การรับสมัคร', 'การเปิดรับ', 'รับสมัคร'], 'เปิดรับสมัครอยู่');
-    const cleanStatus = parseStatus(rawStatus);
+            // 🔧 อ่านข้อมูลตามตำแหน่งคอลัมน์ตายตัวที่กำหนดไว้ใน EXCEL_COLUMNS ด้านบน
+            const getCell = (row, idx, fallback) => {
+                if (idx === undefined) return fallback;
+                const val = row[idx];
+                return (val === undefined || val === null || val === '') ? fallback : String(val);
+            };
 
-    return {
-        company_name: getRowValue(row, ['บริษัท', 'หน่วยงาน', 'สถานประกอบการ', 'company_name', 'company']),
-        position_title: getRowValue(row, ['ตำแหน่ง', 'ทุน', 'หัวข้อ', 'โครงการ', 'position_title', 'position']),
-        // 💵 เพิ่มคีย์เวิร์ดให้ครอบคลุมทุกรูปแบบชื่อคอลัมน์เงินเดือน/สวัสดิการ
-        salary: getRowValue(row, [
-            'เงินเดือน', 'ค่าตอบแทน', 'เบี้ยเลี้ยง', 'สวัสดิการ', 'ทุน', 
-            'ค่าจ้าง', 'ค่าตอบแทน/วัน', 'ค่าตอบแทน/เดือน', 'รายได้',
-            'salary', 'stipend', 'allowance', 'compensation'
-        ], 'ไม่ระบุ'),
-        quota: getRowValue(row, ['จำนวน', 'อัตรา', 'โควต้า', 'quota'], 'ไม่ระบุ'),
-        location: getRowValue(row, ['สถานที่', 'จังหวัด', 'โซน', 'location']),
-        work_format: getRowValue(row, ['รูปแบบ', 'work_format'], 'Onsite'),
-        deadline: getRowValue(row, ['กำหนดการ', 'วันปิด', 'deadline'], 'ไม่ระบุ'),
-        status: cleanStatus,
-        application_channel: getRowValue(row, ['ช่องทาง', 'ลิงก์', 'สมัคร', 'application_channel']),
-        contact_info: getRowValue(row, ['ติดต่อ', 'เบอร์', 'อีเมล', 'contact_info', 'contact'])
-    };
-});
-            const badge = document.getElementById('preview-count-badge');
-            if (badge) badge.innerText = ` พบ ${parsedExcelData.length} รายการ`;
+            parsedExcelData = [];
+            for (let i = 1; i < json.length; i++) {
+                const row = json[i];
+                if (!row || row.length === 0) continue;
+
+                const company = getCell(row, EXCEL_COLUMNS.company_name, '-');
+                const position = getCell(row, EXCEL_COLUMNS.position_title, '-');
+                if (company === '-' && position === '-') continue;
+
+                parsedExcelData.push({
+                    company_name: company,
+                    position_title: position,
+                    quota: getCell(row, EXCEL_COLUMNS.quota, 'ไม่ระบุ'),
+                    location: getCell(row, EXCEL_COLUMNS.location, 'ไม่ระบุ'),
+                    work_format: getCell(row, EXCEL_COLUMNS.work_format, 'Onsite'),
+                    salary: getCell(row, EXCEL_COLUMNS.salary, 'ตามตกลง'),
+                    deadline: getCell(row, EXCEL_COLUMNS.deadline, 'ไม่ระบุ'),
+                    status: normalizeStatusValue(getCell(row, EXCEL_COLUMNS.status, '')),
+                    application_channel: getCell(row, EXCEL_COLUMNS.application_channel, '-'),
+                    contact_info: getCell(row, EXCEL_COLUMNS.contact_info, '-'),
+                    job_type: 'สหกิจศึกษา'
+                });
+            }
+
+            if (parsedExcelData.length === 0) {
+                Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูลที่นำเข้าได้ในไฟล์นี้ กรุณาตรวจสอบว่าคอลัมน์บริษัท (B) และตำแหน่ง (C) มีข้อมูลอยู่', 'warning');
+                return;
+            }
 
             renderPreviewTable(parsedExcelData);
-            
-            const previewSection = document.getElementById('preview-section');
-            if (previewSection) previewSection.style.display = 'block';
-
         } catch (err) {
-            console.error("Excel Read Error:", err);
-            showErrorAlert("อ่านไฟล์ล้มเหลว", "เกิดข้อผิดพลาดในการอ่านไฟล์ Excel: " + err.message);
+            Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถอ่านไฟล์ Excel ได้: ' + err.message, 'error');
         }
     };
     reader.readAsArrayBuffer(file);
 }
 
 function renderPreviewTable(data) {
+    const section = document.getElementById('preview-section');
     const tbody = document.getElementById('preview-body');
-    if (!tbody) return;
+    const badge = document.getElementById('preview-count-badge');
+    if (!section || !tbody) return;
+
+    section.style.display = 'block';
+    badge.innerText = `${data.length} รายการ`;
     tbody.innerHTML = '';
 
-    data.forEach(row => {
-        const tr = document.createElement('tr');
-        const isClosed = row.status && (row.status.includes('ปิด') || row.status.includes('หมด'));
-        
+    data.forEach(item => {
+        const isClosed = item.status === 'ปิดรับสมัครแล้ว';
         const statusBadge = isClosed
-            ? `<span style="background: #fee2e2; color: #dc2626; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-size: 12px; display: inline-block;">🔴 ปิดรับสมัคร</span>`
-            : `<span style="background: #dcfce7; color: #15803d; padding: 4px 10px; border-radius: 20px; font-weight: 600; font-size: 12px; display: inline-block;">🟢 เปิดรับสมัคร</span>`;
+            ? `<span style="background: #fee2e2; color: #dc2626; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">🔴 ปิดรับสมัคร</span>`
+            : `<span style="background: #dcfce7; color: #15803d; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">🟢 เปิดรับสมัคร</span>`;
 
+        const tr = document.createElement('tr');
+        // 🔒 escape ข้อมูลจากไฟล์ที่อัปโหลดก่อนแสดงในตารางพรีวิว
         tr.innerHTML = `
-            <td style="font-weight: 600; color: #1e293b;">${row.company_name}</td>
-            <td style="color: #0284c7; font-weight: 500;">${row.position_title}</td>
-            <td style="color: #475569;">${row.location}</td>
-            <td style="color: #059669; font-weight: 600;">${row.salary}</td>
-            <td style="color: #64748b; font-size: 12px;">${row.contact_info}</td>
+            <td><b>${escapeHtml(item.company_name)}</b></td>
+            <td><span style="color: #003566; font-weight: 500;">${escapeHtml(item.position_title)}</span></td>
+            <td>${escapeHtml(item.location)}</td>
+            <td style="color: #059669; font-weight: 600;">${escapeHtml(item.salary)}</td>
+            <td style="font-size: 11px; color: #64748b;">${escapeHtml(item.application_channel)}</td>
             <td>${statusBadge}</td>
         `;
         tbody.appendChild(tr);
     });
 }
 
+// 🎯 ปรับปรุงการบันทึกประวัติการอัปโหลดให้ซิงก์อีเมลและแสดงผลทันที
 async function syncToDatabase() {
     if (parsedExcelData.length === 0) {
-        showErrorAlert("ไม่พบข้อมูล", "ไม่มีข้อมูลที่จะบันทึกครับ");
+        Swal.fire('แจ้งเตือน', 'ไม่มีข้อมูลสำหรับซิงก์', 'warning');
         return;
     }
 
-    const btn = document.getElementById('btn-sync');
-    if (btn) {
-        btn.innerText = "กำลังบันทึก...";
-        btn.disabled = true;
+    try {
+        // 1. บันทึกข้อมูลประกาศงานลง cwie_jobs
+        const { error: jobErr } = await supabaseClient.from('cwie_jobs').insert(parsedExcelData);
+        if (jobErr) throw jobErr;
+
+        // 2. บันทึกประวัติลง cwie_logs (ใช้ helper ร่วมกับ manual add/edit)
+        const logOk = await logHistoryEntry(uploadedFileName || 'Excel_Import.xlsx', parsedExcelData.length);
+
+        if (!logOk) {
+            // 🔧 แจ้งผู้ใช้ตรงๆ แทนการซ่อน error ไว้ใน console — งานถูกบันทึกแล้ว
+            // แต่ประวัติการอัปโหลดบันทึกไม่สำเร็จ ผู้ใช้จะได้รู้และไปตรวจสอบ
+            // ตาราง cwie_logs / RLS policy ได้ทันที
+            Swal.fire({
+                icon: 'warning',
+                title: 'บันทึกข้อมูลงานสำเร็จ แต่บันทึกประวัติล้มเหลว',
+                text: `นำเข้าประกาศงาน ${parsedExcelData.length} รายการสำเร็จ แต่ไม่สามารถบันทึกลงประวัติการอัปโหลดได้`,
+            });
+        } else {
+            Swal.fire({
+                icon: 'success',
+                title: 'บันทึกข้อมูลเข้าระบบสำเร็จ!',
+                text: `นำเข้าประกาศงานจำนวน ${parsedExcelData.length} รายการเรียบร้อยแล้ว`,
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+
+        // 3. เคลียร์พรีวิวและโหลดตารางใหม่ทันที
+        document.getElementById('preview-section').style.display = 'none';
+        parsedExcelData = [];
+        const fileInput = document.getElementById('excel-file');
+        if (fileInput) fileInput.value = '';
+
+        await fetchCurrentJobs();
+        await loadUploadHistory();
+
+    } catch (err) {
+        Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
     }
+}
+
+// 🎯 โหลดตารางประวัติการอัปโหลด
+async function loadUploadHistory() {
+    const historyBody = document.getElementById('history-body');
+    if (!historyBody) return;
 
     try {
-        await supabaseClient.from('cwie_jobs').delete().neq('id', 0);
+        if (typeof supabaseClient === 'undefined') return;
 
-        const { error: insertError } = await supabaseClient.from('cwie_jobs').insert(parsedExcelData);
+        const { data, error } = await supabaseClient
+            .from('cwie_logs')
+            .select('*')
+            .order('id', { ascending: false });
 
-        if (insertError) {
-            showErrorAlert("เกิดข้อผิดพลาดในการบันทึก", insertError.message);
-        } else {
-            showSuccessAlert(
-                "บันทึกข้อมูลสำเร็จ! ", 
-                `นำเข้าข้อมูลประกาศงาน CWIE จำนวน ${parsedExcelData.length} รายการ เรียบร้อยแล้ว`
-            );
-            
-            await saveUploadLog(uploadedFileName, parsedExcelData.length);
+        if (error) throw error;
+        const logs = data || [];
 
-            const previewSection = document.getElementById('preview-section');
-            if (previewSection) previewSection.style.display = 'none';
-            
-            const fileInput = document.getElementById('excel-file');
-            if (fileInput) fileInput.value = "";
-            
-            parsedExcelData = [];
-
-            fetchCurrentJobs();
-            loadSystemStats();
+        if (logs.length === 0) {
+            historyBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-slate-400">📭 ยังไม่มีประวัติการอัปโหลด</td></tr>`;
+            return;
         }
+
+        historyBody.innerHTML = '';
+        logs.forEach(log => {
+            const dateObj = log.uploaded_at ? new Date(log.uploaded_at) : new Date();
+            const dateStr = dateObj.toLocaleString('th-TH', {
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+
+            const tr = document.createElement('tr');
+            // 🔒 escape ชื่อไฟล์และผู้ดำเนินการก่อนแสดงผล
+            tr.innerHTML = `
+                <td>${escapeHtml(dateStr)}</td>
+                <td><b>${escapeHtml(log.filename) || 'Excel Import'}</b></td>
+                <td><span style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 12px; font-weight: 600;">${escapeHtml(log.record_count) || 0} รายการ</span></td>
+                <td>${escapeHtml(log.uploaded_by) || 'Admin'}</td>
+                <td><span style="background: #dcfce7; color: #15803d; padding: 2px 8px; border-radius: 12px; font-weight: 600;">สำเร็จ</span></td>
+                <td style="text-align: center;">
+                    <button onclick="deleteLog(${Number(log.id)})" class="text-rose-500 hover:text-rose-700 font-bold transition-colors px-2 py-1">🗑️</button>
+                </td>
+            `;
+            historyBody.appendChild(tr);
+        });
     } catch (err) {
-        showErrorAlert("เกิดข้อผิดพลาด", err.message);
-    } finally {
-        if (btn) {
-            btn.innerText = " บันทึกเข้าระบบ (Sync & Publish)";
-            btn.disabled = false;
-        }
+        console.error("Load History Error:", err);
+        historyBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-rose-500">ไม่สามารถโหลดประวัติได้: ${escapeHtml(err.message)}</td></tr>`;
+    }
+}
+
+async function deleteLog(id) {
+    try {
+        await supabaseClient.from('cwie_logs').delete().eq('id', id);
+        loadUploadHistory();
+    } catch (err) { console.warn(err); }
+}
+
+async function clearUploadHistory() {
+    const result = await Swal.fire({
+        title: 'ยืนยันการล้างประวัติ?',
+        text: 'ประวัติการอัปโหลดทั้งหมดจะถูกลบออก',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'ล้างประวัติ',
+        cancelButtonText: 'ยกเลิก',
+        confirmButtonColor: '#f59e0b'
+    });
+
+    if (result.isConfirmed) {
+        try {
+            await supabaseClient.from('cwie_logs').delete().neq('id', 0);
+            loadUploadHistory();
+            Swal.fire({ icon: 'success', title: 'ล้างประวัติสำเร็จ', timer: 1000, showConfirmButton: false });
+        } catch (err) { console.warn(err); }
     }
 }
