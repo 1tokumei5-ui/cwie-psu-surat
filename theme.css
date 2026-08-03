@@ -1,0 +1,255 @@
+/* ============================================================
+   CWIE PSU Surat Thani — Shared Design System (theme.css)
+   ------------------------------------------------------------
+   ใช้ร่วมกันทั้งหน้า Dashboard (index.html) และ Admin (admin.html).
+   ก่อนหน้านี้สองหน้าใช้ชื่อตัวแปรสีคนละชุด (--psu-navy vs --psu-deep)
+   ทำให้หน้าตาไม่ตรงกัน — ไฟล์นี้คือแหล่งความจริงเดียว (single source
+   of truth) โหลดไฟล์นี้ "ก่อน" style.css / admin-style.css เสมอ
+   ============================================================ */
+@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700;800&family=Sarabun:wght@300;400;500;600;700&display=swap');
+
+:root {
+    --font-heading: 'Prompt', sans-serif;
+    --font-body: 'Sarabun', sans-serif;
+
+    /* สีตามคู่มืออัตลักษณ์ PSU จริง (Shades of Blue) */
+    --psu-deep: #003C71;
+    --psu-deep-ink: #04213D;
+    --psu-ocean: #315DAE;
+    --psu-sky: #009CDE;
+    --psu-river: #59CBE8;
+    --psu-sritrang: #B6B8DC;
+    --psu-sky-soft: #EAF6FD;
+
+    --paper: #F5F7FB;
+    --surface: #FFFFFF;
+    --ink: #0B1F33;
+    --ink-muted: #5B6B85;
+    --line: #E3E8F2;
+
+    --status-open: #0E9F6E;
+    --status-open-bg: #E7F8F1;
+    --status-closed: #E11D48;
+    --status-closed-bg: #FDEDF1;
+    --status-warn: #D97706;
+    --status-warn-bg: #FEF3C7;
+
+    --shadow-sm: 0 4px 16px -2px rgba(15, 23, 42, 0.04);
+    --shadow-md: 0 10px 30px -5px rgba(15, 23, 42, 0.06);
+}
+
+* { box-sizing: border-box; }
+
+body {
+    font-family: var(--font-body);
+    background-color: var(--paper);
+    color: var(--ink);
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6, .font-heading {
+    font-family: var(--font-heading) !important;
+    letter-spacing: -0.01em;
+}
+
+a { color: inherit; }
+
+/* Eyebrow label — ป้ายเล็กบอกหมวดหมู่ก่อนหัวข้อใหญ่ (แทนอิโมจิ) */
+.eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-heading);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--psu-sky);
+}
+.eyebrow::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--psu-sky);
+    box-shadow: 0 0 0 3px rgba(0, 156, 222, 0.18);
+    flex-shrink: 0;
+}
+.eyebrow--on-dark { color: var(--psu-river); }
+.eyebrow--on-dark::before { background: var(--psu-river); box-shadow: 0 0 0 3px rgba(89, 203, 232, 0.22); }
+
+/* Status pill — แทน 🔴🟢 อิโมจิเดิมทุกจุดในเว็บ */
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 11px;
+    padding: 3px 10px 3px 8px;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+.status-pill .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: currentColor; }
+.status-pill--open { background: var(--status-open-bg); color: var(--status-open); }
+.status-pill--open .dot { box-shadow: 0 0 0 3px rgba(14,159,110,0.16); }
+.status-pill--closed { background: var(--status-closed-bg); color: var(--status-closed); }
+.status-pill--closed .dot { box-shadow: 0 0 0 3px rgba(225,29,72,0.14); }
+.status-pill--on-dark { background: rgba(255,255,255,0.14); color: #fff; }
+.status-pill--on-dark .dot { background: #fff; }
+
+/* ป้ายวงรีฟ้าอ่อน ใช้ทั้งจำนวนรายการและประเภทงาน */
+.badge-count {
+    display: inline-flex;
+    align-items: center;
+    background: var(--psu-sky-soft);
+    color: var(--psu-sky);
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 12px;
+    border-radius: 999px;
+    border: 1px solid #bae6fd;
+    font-family: var(--font-heading);
+    white-space: nowrap;
+}
+
+/* Company avatar — วงกลมอักษรย่อ + สีที่คำนวณจากชื่อ (แทนโลโก้ที่ยังไม่มี) */
+.company-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 12px;
+    color: #fff;
+    flex-shrink: 0;
+}
+
+/* Empty / loading state — ใช้แทน 📭 อิโมจิเดิม */
+.empty-state, .loading-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 48px 16px;
+    color: var(--ink-muted);
+}
+.loading-state { flex-direction: row; padding: 28px 16px; }
+.empty-state svg { opacity: 0.5; }
+.empty-state span, .loading-state span { font-size: 13px; font-weight: 500; }
+.loading-spinner {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid var(--line); border-top-color: var(--psu-sky);
+    animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Brand mark — ไอคอนโลโก้ "เส้นทาง" ต้นฉบับ (ใช้ทั้ง header และ footer)
+   🔧 พบระหว่างตรวจสอบ: คลาสนี้ถูกอ้างถึงใน index.html แต่ไม่เคยถูกนิยามไว้ที่ไหนเลย
+   ถ้าไม่ใส่ตรงนี้ SVG โลโก้จะไม่มีขนาดกำกับ อาจแสดงผลใหญ่ผิดปกติในบางเบราว์เซอร์ */
+.brand-mark { width: 42px; height: 42px; flex-shrink: 0; }
+
+/* Icon + text alignment สำหรับปุ่มเล็กๆ ในตาราง (แก้ไข/ลบ)
+   🔧 พบระหว่างตรวจสอบ: admin.js ใช้คลาสนี้กับปุ่มแก้ไข/ลบ แต่ไม่เคยถูกนิยามไว้เช่นกัน */
+.icon-btn { display: inline-flex; align-items: center; gap: 5px; }
+.icon-btn svg { flex-shrink: 0; }
+
+/* Buttons — ชุดปุ่มมาตรฐานร่วมกัน */
+.btn {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 14px;
+    padding: 10px 20px;
+}
+.btn:hover { transform: translateY(-1px); }
+.btn svg { flex-shrink: 0; }
+.btn-primary { background: var(--psu-deep); color: #fff; box-shadow: 0 4px 14px rgba(0,40,85,0.22); }
+.btn-primary:hover { background: var(--psu-ocean); }
+.btn-accent { background: var(--psu-sky); color: #fff; box-shadow: 0 4px 14px rgba(0,156,222,0.25); }
+.btn-accent:hover { background: #0284c7; }
+.btn-success { background: var(--status-open); color: #fff; box-shadow: 0 4px 14px rgba(14,159,110,0.22); }
+.btn-success:hover { background: #0b8a5f; }
+.btn-ghost { background: var(--psu-sky-soft); color: var(--psu-sky); border: 1px solid #bae6fd; }
+.btn-ghost:hover { background: var(--psu-sky); color: #fff; }
+.btn-danger-soft { background: var(--status-closed-bg); color: var(--status-closed); border: 1px solid #fecdd3; }
+.btn-danger-soft:hover { background: var(--status-closed); color: #fff; }
+.btn-warn-soft { background: var(--status-warn-bg); color: var(--status-warn); border: 1px solid #fde68a; }
+.btn-warn-soft:hover { background: var(--status-warn); color: #fff; }
+
+/* Footer — ใช้ร่วมกันทั้งสองหน้า */
+.site-footer {
+    max-width: 1180px;
+    margin: 32px auto 0;
+    padding: 28px 4px 90px;
+    border-top: 1px solid var(--line);
+    color: var(--ink-muted);
+    font-size: 12.5px;
+    line-height: 1.7;
+}
+.site-footer__grid { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 24px; margin-bottom: 20px; }
+@media (max-width: 768px) { .site-footer__grid { grid-template-columns: 1fr; } }
+.site-footer__brand-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.site-footer__title { font-family: var(--font-heading); font-weight: 700; color: var(--psu-deep); font-size: 13.5px; margin: 0; }
+.site-footer__sub { margin: 1px 0 0; }
+.site-footer__heading { display: block; font-family: var(--font-heading); font-weight: 700; color: var(--ink); font-size: 12.5px; margin-bottom: 8px; }
+.site-footer__links, .site-footer__contact { display: flex; flex-direction: column; gap: 6px; }
+.site-footer__links a { text-decoration: none; color: var(--ink-muted); }
+.site-footer__links a:hover { color: var(--psu-sky); text-decoration: underline; }
+.site-footer__bottom { border-top: 1px solid var(--line); padding-top: 16px; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; }
+
+/* Focus states — คงไว้เพื่อการเข้าถึง (accessibility) ทั้งสองหน้า */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--psu-sky);
+    outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 0.001ms !important; animation-duration: 0.001ms !important; }
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #eef1f7; }
+::-webkit-scrollbar-thumb { background: #c4cde0; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #a3aecb; }
+
+.swal2-popup { font-family: var(--font-body) !important; border-radius: 20px !important; }
+.swal2-title { font-family: var(--font-heading) !important; }
+
+/* ============================================================
+   Skeleton loading — แถบเรืองแสงระหว่างรอข้อมูลจริง (แทนตัวหนังสือ "กำลังโหลด" เฉยๆ)
+   ============================================================ */
+.skeleton-bar {
+    height: 12px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, #eef1f7 25%, #e4e9f2 37%, #eef1f7 63%);
+    background-size: 400% 100%;
+    animation: skeleton-shine 1.4s ease infinite;
+}
+@keyframes skeleton-shine { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+/* แถวในตารางค่อยๆ ปรากฏขึ้นทีละนิดเมื่อข้อมูลโหลดเสร็จ ให้ความรู้สึกลื่นไหลมากขึ้น */
+@keyframes fade-in-up { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.ui-table tbody tr, #job-list-body tr, #current-jobs-body tr, #preview-body tr, #history-body tr {
+    animation: fade-in-up 0.25s ease both;
+}
+
+/* แถบสีด้านซ้ายของ stat box หน้าแอดมิน ให้เข้าชุดกับสไตล์ stat card ฝั่ง dashboard */
+.stat-box--accent-deep { border-left: 4px solid var(--psu-deep); }
+.stat-box--accent-sky { border-left: 4px solid var(--psu-sky); }
+
+@media print {
+    .site-footer, .no-print, #btn-logout { display: none !important; }
+}
