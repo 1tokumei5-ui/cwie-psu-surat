@@ -3,7 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - CWIE Job Management System</title>
+    <title>Admin | CWIE PSU Surat Thani Job Management System</title>
+    <meta name="description" content="ระบบจัดการประกาศงานสหกิจศึกษาและฝึกงาน สำหรับเจ้าหน้าที่ CWIE มหาวิทยาลัยสงขลานครินทร์ วิทยาเขตสุราษฎร์ธานี">
+    <!-- 🔒 กันหน้าแอดมินหลุดขึ้น Google/เครื่องมือค้นหา -->
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#003C71">
+
+    <!-- 🖼️ Favicon เดียวกับหน้า Dashboard เพื่อความสม่ำเสมอ (เดิมหน้านี้ไม่มี favicon เลย) -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23003C71'/%3E%3Ccircle cx='10' cy='22' r='3' fill='%2359CBE8'/%3E%3Cpath d='M10 22C14 12 18 10 24 8' stroke='%23009CDE' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='24' cy='8' r='3.5' fill='%23fff'/%3E%3C/svg%3E">
 
     <!-- External Libraries -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -11,9 +18,25 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
-    <!-- Custom CSS & Config -->
+    <!-- Custom CSS & Config: theme.css (โทเค็นร่วม) ต้องมาก่อน admin-style.css (เฉพาะหน้านี้) เสมอ -->
+    <link rel="stylesheet" href="theme.css">
     <link rel="stylesheet" href="admin-style.css">
     <script src="supabase-config.js"></script>
+
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                fontFamily: { sans: ['Sarabun', 'sans-serif'], heading: ['Prompt', 'sans-serif'] },
+                colors: {
+                    /* 🎨 เหมือนกับ index.html เป๊ะ ให้สองหน้าใช้โทนสีชุดเดียวกันจริงๆ */
+                    psublue: { DEFAULT: '#003C71', dark: '#04213D', light: '#009CDE', soft: '#EAF6FD' },
+                    psuocean: '#315DAE', psuriver: '#59CBE8', sritrang: '#B6B8DC'
+                }
+            }
+        }
+    }
+    </script>
 </head>
 <body class="bg-slate-50 text-slate-800 font-sans">
 
@@ -22,8 +45,13 @@
         <div class="login-split-card">
             <div class="login-banner-left">
                 <div>
-                    <div class="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-md flex items-center justify-center text-xl font-bold mb-6">🎓</div>
-                    <span class="text-xs font-semibold uppercase tracking-widest text-sky-300">PSU Surat Thani</span>
+                    <svg class="w-10 h-10 mb-6" viewBox="0 0 42 42" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <rect width="42" height="42" rx="11" fill="rgba(255,255,255,0.1)"/>
+                        <path d="M12 29C17 16 22 13 30 10" stroke="#59CBE8" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+                        <circle cx="12" cy="29" r="3.5" fill="#B6B8DC"/>
+                        <circle cx="30" cy="10" r="4.5" fill="#fff"/>
+                    </svg>
+                    <span class="eyebrow eyebrow--on-dark">PSU Surat Thani</span>
                     <h2 class="text-2xl font-bold mt-2 leading-snug">CWIE Management Control Panel</h2>
                 </div>
                 <p class="text-xs text-slate-300 leading-relaxed mt-8">
@@ -32,22 +60,25 @@
             </div>
 
             <div class="login-form-right">
-                <h3 class="login-title-main">ยินดีต้อนรับกลับมา 👋</h3>
+                <h3 class="login-title-main">ยินดีต้อนรับกลับมา</h3>
                 <p class="login-subtitle-main">กรุณาระบุบัญชีแอดมินเพื่อเข้าสู่ระบบควบคุม</p>
 
                 <div class="space-y-4">
                     <div>
                         <label class="block text-xs font-semibold text-slate-700 mb-1.5">อีเมลผู้ดูแลระบบ</label>
-                        <input type="email" id="admin-email" class="pastel-input" placeholder="admin@psu.ac.th">
+                        <input type="email" id="admin-email" autocomplete="email" class="pastel-input" placeholder="admin@psu.ac.th">
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-slate-700 mb-1.5">รหัสผ่าน</label>
-                        <input type="password" id="admin-password" class="pastel-input" placeholder="••••••••">
+                        <input type="password" id="admin-password" autocomplete="current-password" class="pastel-input" placeholder="••••••••">
                     </div>
-                    <button id="btn-login" onclick="loginAdmin()" class="btn-login-submit">เข้าสู่ระบบ</button>
+                    <button id="btn-login" onclick="loginAdmin()" class="btn-login-submit">
+                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg>
+                        เข้าสู่ระบบ
+                    </button>
                 </div>
 
-                <p id="login-error" class="login-error-msg">❌ อีเมลหรือรหัสผ่านไม่ถูกต้อง</p>
+                <p id="login-error" class="login-error-msg"></p>
 
                 <div class="mt-6 text-center">
                     <a href="index.html" class="text-xs text-slate-400 hover:text-sky-600 transition-colors">← กลับไปยังหน้า Dashboard ผู้ใช้</a>
@@ -61,27 +92,42 @@
 
         <!-- Header -->
         <header class="admin-header">
-            <div>
-                <h1 class="admin-title">⚙️ Admin Control Panel</h1>
-                <span class="text-xs text-slate-400">ระบบจัดการประกาศงานและทุน CWIE PSU Surat Thani 2026</span>
+            <div class="admin-title-row">
+                <div class="admin-title-icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+                </div>
+                <div>
+                    <h1 class="admin-title">Admin Control Panel</h1>
+                    <span class="text-xs text-slate-400">ระบบจัดการประกาศงานและทุน CWIE PSU Surat Thani 2026</span>
+                </div>
             </div>
-            <div class="flex items-center gap-3">
-                <a href="index.html" target="_blank" class="btn-dashboard">📊 เปิดหน้า Dashboard ↗</a>
-                <button onclick="logoutAdmin()" id="btn-logout" class="btn-logout-styled" style="display: none;">🚪 ออกจากระบบ</button>
+            <div class="header-actions">
+                <a href="index.html" target="_blank" class="btn-dashboard">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-4"/></svg>
+                    เปิดหน้า Dashboard
+                </a>
+                <button onclick="logoutAdmin()" id="btn-logout" class="btn-logout-styled" style="display: none;">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+                    ออกจากระบบ
+                </button>
             </div>
         </header>
 
         <!-- 📊 Live Stats Bar -->
         <div class="stats-grid">
-            <div class="stat-box">
-                <div class="stat-icon-bg">📦</div>
+            <div class="stat-box stat-box--accent-deep">
+                <div class="stat-icon-bg">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.3 7 12 12l8.7-5M12 22V12"/></svg>
+                </div>
                 <div>
                     <div class="stat-label">ข้อมูลในระบบทั้งหมด</div>
                     <div class="stat-val" id="stat-total-jobs">0 รายการ</div>
                 </div>
             </div>
-            <div class="stat-box">
-                <div class="stat-icon-bg">🕒</div>
+            <div class="stat-box stat-box--accent-sky">
+                <div class="stat-icon-bg">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+                </div>
                 <div>
                     <div class="stat-label">อัปเดตข้อมูลล่าสุด</div>
                     <div class="stat-val" id="stat-last-update" style="font-size: 15px; color: #0284c7;">-</div>
@@ -94,7 +140,10 @@
             <h2 class="card-title">นำเข้าข้อมูลประกาศงาน CWIE (.xlsx, .csv)</h2>
             <div class="flex flex-col md:flex-row gap-3 items-center">
                 <input type="file" id="excel-file" accept=".xlsx, .csv" title="เลือกไฟล์ Excel" aria-label="เลือกไฟล์ Excel" class="file-input w-full md:w-auto">
-                <button onclick="handleFileUpload()" class="btn-preview">1. พรีวิวข้อมูล (Preview)</button>
+                <button onclick="handleFileUpload()" class="btn-preview">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 11l3-3 3 3"/><path d="M12 8v8"/><path d="M20 16.5A4.5 4.5 0 0 0 18 8h-1.3A6 6 0 1 0 5 13.5"/></svg>
+                    1. พรีวิวข้อมูล (Preview)
+                </button>
             </div>
             <p class="upload-note">* รองรับไฟล์สรุปประกาศรับสมัครงาน CWIE 2026 โดยอัตโนมัติ</p>
         </div>
@@ -106,7 +155,10 @@
                     <h2 class="card-title" style="margin-bottom: 0;">ตัวอย่างข้อมูลก่อนบันทึก</h2>
                     <span id="preview-count-badge" class="badge-count">0 รายการ</span>
                 </div>
-                <button onclick="syncToDatabase()" id="btn-sync" class="btn-sync">2. บันทึกเข้าระบบ (Sync & Publish)</button>
+                <button onclick="syncToDatabase()" id="btn-sync" class="btn-sync">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+                    2. บันทึกเข้าระบบ (Sync &amp; Publish)
+                </button>
             </div>
 
             <div class="table-container">
@@ -130,17 +182,31 @@
         <div class="admin-card">
             <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
                 <div>
-                    <h2 class="card-title" style="margin-bottom: 2px;">🗂️ ข้อมูลประกาศงานในระบบปัจจุบัน</h2>
+                    <h2 class="card-title" style="margin-bottom: 2px;">ข้อมูลประกาศงานในระบบปัจจุบัน</h2>
                     <span class="text-xs text-slate-400">รายการตำแหน่งงานที่กำลังเปิดแสดงอยู่บนหน้า Dashboard</span>
                 </div>
                 <div class="flex gap-2">
-                    <button type="button" onclick="openAddJobModal()" class="btn-sync" style="background: #0284c7; color: white; margin: 0; cursor: pointer;">
-                        ➕ เพิ่มงานใหม่ (Manual Add)
+                    <button type="button" onclick="openAddJobModal()" class="btn-accent-action">
+                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+                        เพิ่มงานใหม่ (Manual Add)
                     </button>
-                    <button type="button" onclick="deleteAllJobs()" class="btn-danger-pastel" style="cursor: pointer;">
-                        🚨 ล้างข้อมูลงานทั้งหมด
+                    <button type="button" onclick="deleteAllJobs()" class="btn-danger-pastel">
+                        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg>
+                        ล้างข้อมูลงานทั้งหมด
                     </button>
                 </div>
+            </div>
+
+            <!-- 🆕 ช่องค้นหา + ปุ่มส่งออก Excel: เดิมตารางนี้ไม่มีวิธีค้นหาเลย ต้องเลื่อนดูทีละหน้า -->
+            <div class="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 mb-4">
+                <div class="relative w-full md:w-72">
+                    <svg class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+                    <input type="text" id="current-jobs-search" oninput="filterCurrentJobsTable()" placeholder="ค้นหาบริษัท / ตำแหน่ง / สถานที่ในระบบ..." class="pastel-input w-full" style="padding-left:34px;">
+                </div>
+                <button type="button" onclick="exportCurrentJobsToExcel()" class="btn btn-ghost" style="white-space:nowrap;">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                    ส่งออกเป็น Excel
+                </button>
             </div>
 
             <div class="table-container">
@@ -159,17 +225,24 @@
                     <tbody id="current-jobs-body"></tbody>
                 </table>
             </div>
+
+            <!-- 🆕 แบ่งหน้า: เดิมโหลดข้อมูลทั้งหมดมาแสดงรวดเดียว พอข้อมูลเยอะจะโหลดช้าและเลื่อนหายาก -->
+            <div class="flex justify-between items-center mt-4 flex-wrap gap-3">
+                <div id="current-jobs-pagination-info" class="text-xs text-slate-400 font-medium"></div>
+                <div id="current-jobs-pagination" class="flex gap-1.5 items-center"></div>
+            </div>
         </div>
 
         <!-- 4. ส่วนจัดการประวัติการอัปโหลดข้อมูล -->
         <div class="admin-card">
             <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
                 <div>
-                    <h2 class="card-title" style="margin-bottom: 2px;">📜 ประวัติการอัปโหลดข้อมูล (Upload History)</h2>
+                    <h2 class="card-title" style="margin-bottom: 2px;">ประวัติการอัปโหลดข้อมูล (Upload History)</h2>
                     <span class="text-xs text-slate-400">บันทึกย้อนหลังการอัปโหลดไฟล์เข้าระบบ</span>
                 </div>
-                <button onclick="clearUploadHistory()" class="btn-danger-pastel" style="background: #fef3c7; color: #d97706; border-color: #fde68a;">
-                    🧹 ล้างประวัติทั้งหมด
+                <button onclick="clearUploadHistory()" class="btn-warn-pastel">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                    ล้างประวัติทั้งหมด
                 </button>
             </div>
 
@@ -193,13 +266,13 @@
     </div>
 
     <!-- 📝 MODAL เพิ่ม/แก้ไขงาน -->
-    <div id="admin-job-modal" style="display: none; position: fixed; inset: 0; z-index: 9999; background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 1rem;">
+    <div id="admin-job-modal" style="display: none; position: fixed; inset: 0; z-index: 9999; background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); align-items: center; justify-content: center; padding: 1rem;" role="dialog" aria-modal="true" aria-labelledby="form-modal-title">
         <div class="bg-white w-full max-w-lg rounded-2xl p-6 shadow-2xl border border-slate-100 text-left relative max-h-[90vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4 border-b pb-3">
-                <h3 id="form-modal-title" class="text-lg font-bold text-slate-800">➕ เพิ่มประกาศงานใหม่</h3>
-                <button type="button" onclick="closeAdminJobModal()" class="text-slate-400 hover:text-slate-600 text-xl font-bold px-2">&times;</button>
+                <h3 id="form-modal-title" class="text-lg font-bold text-slate-800">เพิ่มประกาศงานใหม่</h3>
+                <button type="button" onclick="closeAdminJobModal()" aria-label="ปิดหน้าต่าง" class="text-slate-400 hover:text-slate-600 text-xl font-bold px-2">&times;</button>
             </div>
-            
+
             <input type="hidden" id="form-job-id">
 
             <div class="space-y-3 text-xs">
@@ -239,18 +312,25 @@
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">ประเภทงาน / โครงการ</label>
                         <select id="form-job-type" class="pastel-input w-full px-3 py-2 border rounded-xl font-heading">
-                            <option value="สหกิจศึกษา">🎓 สหกิจศึกษา</option>
-                            <option value="ฝึกงาน">💼 ฝึกงาน</option>
-                            <option value="รับเข้าทำงาน">🚀 รับเข้าทำงาน</option>
+                            <option value="สหกิจศึกษา">สหกิจศึกษา</option>
+                            <option value="ฝึกงาน">ฝึกงาน</option>
+                            <option value="รับเข้าทำงาน">รับเข้าทำงาน</option>
                         </select>
                     </div>
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">สถานะประกาศ</label>
                         <select id="form-status" class="pastel-input w-full px-3 py-2 border rounded-xl font-heading">
-                            <option value="เปิดรับสมัครอยู่">🟢 เปิดรับสมัครอยู่</option>
-                            <option value="ปิดรับสมัครแล้ว">🔴 ปิดรับสมัครแล้ว</option>
+                            <option value="เปิดรับสมัครอยู่">เปิดรับสมัครอยู่</option>
+                            <option value="ปิดรับสมัครแล้ว">ปิดรับสมัครแล้ว</option>
                         </select>
                     </div>
+                </div>
+                <div>
+                    <!-- 🔧 เพิ่มช่องนี้ใหม่: เดิมฟอร์มเพิ่ม/แก้งานด้วยมือไม่มีช่องกรอกวันปิดรับสมัครเลย
+                         ทำให้งานที่แอดมินเพิ่มเองไม่มีวันปิดรับ ในขณะที่งานที่นำเข้าจาก Excel มี
+                         (ช่อง "กำหนดการวันปิดรับ" ในป๊อปอัพของ Dashboard จะว่างเปล่าสำหรับงานกลุ่มนี้) -->
+                    <label class="block font-semibold text-slate-700 mb-1">วันปิดรับสมัคร</label>
+                    <input type="text" id="form-deadline" class="pastel-input w-full px-3 py-2 border rounded-xl" placeholder="เช่น 31 ธ.ค. 2569 หรือเว้นว่างถ้าไม่ระบุ">
                 </div>
                 <div>
                     <label class="block font-semibold text-slate-700 mb-1">ลิงก์สมัครงาน / ข้อมูลติดต่อ</label>
@@ -260,11 +340,24 @@
 
             <div class="flex justify-end gap-2 mt-6 pt-3 border-t">
                 <button type="button" onclick="closeAdminJobModal()" class="px-4 py-2 bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs hover:bg-slate-300">ยกเลิก</button>
-                <button type="button" onclick="saveJobManual()" class="btn-sync px-5 py-2 text-white rounded-xl text-xs font-semibold" style="margin: 0; background: #002855;">💾 บันทึกข้อมูล</button>
+                <button type="button" onclick="saveJobManual()" class="btn-primary-action">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z"/><path d="M17 21v-8H7v8M7 3v5h8"/></svg>
+                    บันทึกข้อมูล
+                </button>
             </div>
         </div>
     </div>
 
+    <!-- 🦶 Footer -->
+    <footer class="admin-container site-footer">
+        <div class="site-footer__bottom" style="border-top: none; padding-top: 0;">
+            <span>© 2026 มหาวิทยาลัยสงขลานครินทร์ วิทยาเขตสุราษฎร์ธานี · แผงควบคุมสำหรับเจ้าหน้าที่เท่านั้น</span>
+            <a href="index.html" style="color: var(--psu-sky);">กลับสู่หน้า Dashboard สาธารณะ →</a>
+        </div>
+    </footer>
+
+    <!-- 🔗 shared-utils.js ต้องโหลดก่อน admin.js เสมอ -->
+    <script src="shared-utils.js"></script>
     <script src="admin.js"></script>
 </body>
 </html>
