@@ -1,20 +1,16 @@
+/* ============================================================
+   CWIE PSU Surat Thani — Dashboard logic (dashboard.js)
+   ต้องโหลดหลัง shared-utils.js เสมอ (ใช้ escapeHtml, isJobClosed,
+   statusPillHtml, getCompanyAvatar, loadingRowHtml, emptyRowHtml
+   ที่มาจากไฟล์นั้น)
+   ============================================================ */
+
 let allJobs = [];
 let filteredJobs = [];
 let currentPage = 1;
 const itemsPerPage = 10;
 let locationChartInstance = null;
 let statusChartInstance = null;
-
-// 🔒 helper: กัน XSS — แปลงข้อความให้ปลอดภัยก่อนแทรกลงใน innerHTML
-function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
 
 document.addEventListener('DOMContentLoaded', async () => {
     if (typeof supabaseClient !== 'undefined' && supabaseClient.auth) {
@@ -31,6 +27,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (secretTrigger) {
         secretTrigger.addEventListener('dblclick', () => { window.location.href = 'admin.html'; });
     }
+
+    // ปิดป๊อปอัพรายละเอียดงานด้วยปุ่ม Esc เพื่อการเข้าถึงที่ดีขึ้น
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeJobDetailModal();
+    });
 
     fetchDashboardJobs();
     setupRealtimeSubscription();
@@ -66,8 +67,7 @@ function updateDashboardStats(jobs) {
     const total = jobs.length;
     let openCount = 0, closedCount = 0;
     jobs.forEach(job => {
-        const isClosed = job.status === 'ปิดรับสมัครแล้ว' || job.status === 'ปิดรับสมัคร' || job.status === 'ปิด';
-        if (isClosed) closedCount++; else openCount++;
+        if (isJobClosed(job.status)) closedCount++; else openCount++;
     });
     document.getElementById('dash-stat-total').innerText = total.toLocaleString();
     document.getElementById('dash-stat-open').innerText = openCount.toLocaleString();
@@ -80,8 +80,7 @@ function renderCharts(jobs) {
     jobs.forEach(job => {
         const loc = (job.location && job.location !== '-') ? job.location.trim() : 'ไม่ระบุ';
         locationCounts[loc] = (locationCounts[loc] || 0) + 1;
-        const isClosed = job.status === 'ปิดรับสมัครแล้ว' || job.status === 'ปิดรับสมัคร' || job.status === 'ปิด';
-        if (isClosed) closedCount++; else openCount++;
+        if (isJobClosed(job.status)) closedCount++; else openCount++;
     });
 
     const ctxLoc = document.getElementById('chart-location');
@@ -120,22 +119,22 @@ function populateLocationFilter(jobs) {
     });
 }
 
-// 🔧 debounce ป้องกันการ filter ถี่เกินไปขณะพิมพ์
-let searchDebounceTimer = null;
-function filterJobs() {
-    clearTimeout(searchDebounceTimer);
-    searchDebounceTimer = setTimeout(() => {
-        const searchVal = document.getElementById('search-input')?.value.toLowerCase().trim() || '';
-        const locationVal = document.getElementById('location-filter')?.value || '';
-        filteredJobs = allJobs.filter(job => {
-            const matchSearch = (job.company_name || '').toLowerCase().includes(searchVal) || (job.position_title || '').toLowerCase().includes(searchVal);
-            const matchLocation = locationVal === '' || (job.location && job.location.trim() === locationVal);
-            return matchSearch && matchLocation;
-        });
-        currentPage = 1;
-        renderPaginatedTable();
-    }, 200);
-}
+// 🔧 debounce ป้องกันการ filter ถี่เกินไปขณะพิมพ์ (ใช้ debounce() กลางจาก shared-utils.js
+// แทนการเขียน setTimeout/clearTimeout เองซ้ำกับที่ admin.js ก็ต้องใช้แบบเดียวกัน)
+const filterJobs = debounce(() => {
+    const searchVal = document.getElementById('search-input')?.value.toLowerCase().trim() || '';
+    const locationVal = document.getElementById('location-filter')?.value || '';
+    filteredJobs = allJobs.filter(job => {
+        // 🔧 แก้บั๊ก: ช่องค้นหาเขียนว่าค้นได้ทั้งบริษัท/ตำแหน่ง/สถานที่ แต่โค้ดเดิมไม่เช็ค location เลย
+        const matchSearch = (job.company_name || '').toLowerCase().includes(searchVal)
+            || (job.position_title || '').toLowerCase().includes(searchVal)
+            || (job.location || '').toLowerCase().includes(searchVal);
+        const matchLocation = locationVal === '' || (job.location && job.location.trim() === locationVal);
+        return matchSearch && matchLocation;
+    });
+    currentPage = 1;
+    renderPaginatedTable();
+}, 200);
 
 function renderPaginatedTable() {
     const tbody = document.getElementById('job-list-body');
@@ -150,91 +149,80 @@ function renderPaginatedTable() {
     const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
     const paginatedData = filteredJobs.slice(startIndex, endIndex);
 
-    if (infoEl) infoEl.innerText = `แสดง ${startIndex + 1} - ${endIndex} จากทั้งหมด ${totalItems.toLocaleString()} รายการ`;
+    if (infoEl) infoEl.innerText = `แสดง ${totalItems === 0 ? 0 : startIndex + 1} - ${endIndex} จากทั้งหมด ${totalItems.toLocaleString()} รายการ`;
 
     if (paginatedData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-slate-400">📭 ไม่พบรายการประกาศงาน</td></tr>`;
+        tbody.innerHTML = emptyRowHtml(7, 'ไม่พบรายการประกาศงานที่ตรงกับเงื่อนไข');
     } else {
         tbody.innerHTML = '';
         paginatedData.forEach(job => {
-            const isClosed = job.status === 'ปิดรับสมัครแล้ว' || job.status === 'ปิดรับสมัคร' || job.status === 'ปิด';
-            const statusBadge = isClosed
-                ? `<span class="bg-rose-50 text-rose-600 border border-rose-100 px-2.5 py-0.5 rounded-full text-[11px] font-semibold font-heading whitespace-nowrap">🔴 ปิดรับสมัคร</span>`
-                : `<span class="bg-emerald-50 text-emerald-700 border border-emerald-100 px-2.5 py-0.5 rounded-full text-[11px] font-semibold font-heading whitespace-nowrap">🟢 เปิดรับสมัคร</span>`;
-
-            const jobTypeBadge = `<span class="bg-sky-50 text-psublue border border-sky-100 px-2.5 py-0.5 rounded-full text-[11px] font-semibold font-heading whitespace-nowrap">${escapeHtml(job.job_type) || 'สหกิจศึกษา'}</span>`;
+            const avatar = getCompanyAvatar(job.company_name);
+            const jobTypeBadge = `<span class="badge-count">${escapeHtml(job.job_type) || 'สหกิจศึกษา'}</span>`;
 
             const tr = document.createElement('tr');
             tr.className = "hover:bg-slate-50/80 transition-colors cursor-pointer";
             tr.onclick = () => openJobDetailModal(job);
             // 🔒 escape ข้อมูลทุกช่องที่มาจากฐานข้อมูล (อาจมาจากไฟล์ Excel ที่อัปโหลด)
+            // 🔧 แก้บั๊ก: เดิมคอลัมน์นี้แสดง "ประเภทงาน" (jobTypeBadge) แต่หัวตารางเขียนว่า "สถานที่ปฏิบัติงาน"
+            //    ทำให้ทุกคอลัมน์ตั้งแต่ตัวนี้เป็นต้นไปเลื่อนไม่ตรงกับหัวตาราง — ตอนนี้แก้หัวตารางใน index.html
+            //    ให้ตรงกับลำดับข้อมูลจริงนี้แล้ว: บริษัท, ตำแหน่ง, ประเภทงาน, สถานที่, เงินเดือน, สถานะ, รายละเอียด
             tr.innerHTML = `
-                <td class="p-4 font-semibold text-slate-800">${escapeHtml(job.company_name) || '-'}</td>
+                <td class="p-4">
+                    <div class="flex items-center gap-2.5">
+                        <div class="company-avatar" style="background:${avatar.color};">${escapeHtml(avatar.initial)}</div>
+                        <span class="font-semibold text-slate-800">${escapeHtml(job.company_name) || '-'}</span>
+                    </div>
+                </td>
                 <td class="p-4 font-medium text-psublue">${escapeHtml(job.position_title) || '-'}</td>
                 <td class="p-4">${jobTypeBadge}</td>
                 <td class="p-4 text-slate-600">${escapeHtml(job.location) || '-'}</td>
                 <td class="p-4 font-semibold text-emerald-600">${escapeHtml(job.salary) || 'ไม่ระบุ'}</td>
-                <td class="p-4">${statusBadge}</td>
-                <td class="p-4 text-center"><button class="px-3 py-1 bg-slate-100 text-psublue rounded-lg text-xs font-medium hover:bg-psublue hover:text-white transition-all font-heading">🔍 ดูข้อมูล</button></td>
+                <td class="p-4">${statusPillHtml(job.status)}</td>
+                <td class="p-4 text-center"><button class="px-3 py-1 bg-slate-100 text-psublue rounded-lg text-xs font-medium hover:bg-psublue hover:text-white transition-all font-heading">ดูข้อมูล</button></td>
             `;
             tbody.appendChild(tr);
         });
     }
 
-    if (btnContainer) {
-        btnContainer.innerHTML = '';
-        const prevBtn = document.createElement('button');
-        prevBtn.innerText = '‹ ก่อนหน้า';
-        prevBtn.className = `px-3 py-1.5 rounded-xl text-xs font-semibold ${currentPage === 1 ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-slate-100 text-slate-600 hover:bg-psublue hover:text-white'}`;
-        prevBtn.disabled = currentPage === 1;
-        prevBtn.onclick = () => { currentPage--; renderPaginatedTable(); };
-        btnContainer.appendChild(prevBtn);
-
-        for (let i = 1; i <= totalPages; i++) {
-            if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
-                const pageBtn = document.createElement('button');
-                pageBtn.innerText = i;
-                pageBtn.className = `px-3 py-1.5 rounded-xl text-xs font-semibold ${i === currentPage ? 'bg-psublue text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`;
-                pageBtn.onclick = () => { currentPage = i; renderPaginatedTable(); };
-                btnContainer.appendChild(pageBtn);
-            }
-        }
-
-        const nextBtn = document.createElement('button');
-        nextBtn.innerText = 'ถัดไป ›';
-        nextBtn.className = `px-3 py-1.5 rounded-xl text-xs font-semibold ${currentPage === totalPages ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-slate-100 text-slate-600 hover:bg-psublue hover:text-white'}`;
-        nextBtn.disabled = currentPage === totalPages;
-        nextBtn.onclick = () => { currentPage++; renderPaginatedTable(); };
-        btnContainer.appendChild(nextBtn);
-    }
+    // 🔧 ใช้ renderPagination() กลางจาก shared-utils.js แทนลูปเดิมที่ข้ามเลขหน้าโดยไม่มี
+    // จุดไข่ปลาคั่น (บั๊กเดิม: ดูเหมือนเลขหน้าต่อเนื่องกันทั้งที่จริงข้ามไป) — ฟังก์ชันเดียวกันนี้
+    // ตอนนี้ใช้ร่วมกับตาราง "ข้อมูลในระบบปัจจุบัน" ฝั่งแอดมินด้วย
+    renderPagination(btnContainer, {
+        currentPage, totalPages,
+        onChange: (p) => { currentPage = p; renderPaginatedTable(); }
+    });
 }
 
 function openJobDetailModal(job) {
     const modal = document.getElementById('job-detail-modal');
     if (!modal) return;
-    const isClosed = job.status === 'ปิดรับสมัครแล้ว' || job.status === 'ปิดรับสมัคร' || job.status === 'ปิด';
 
-    // 🔧 ตั้งค่าแบบปลอดภัย — ถ้า element ไม่มีอยู่ในหน้า HTML จะข้ามไปเฉยๆ แทนที่จะ error
     const setText = (id, text) => {
         const el = document.getElementById(id);
         if (el) el.innerText = text;
     };
 
-    // ใช้ innerText อยู่แล้ว (ปลอดภัยจาก XSS โดยธรรมชาติ) — คงไว้ตามเดิม
     setText('modal-company-name', job.company_name || '-');
     setText('modal-position-title', job.position_title || '-');
     setText('modal-location', job.location || '-');
-    // 🔧 modal-work-format มี element ในหน้าเว็บแต่เดิมไม่เคยถูกตั้งค่าเลย เพิ่มให้แสดงข้อมูลจริง
     setText('modal-work-format', job.work_format || 'ไม่ระบุ');
     setText('modal-salary', job.salary || 'ไม่ระบุ');
     setText('modal-quota', job.quota || 'ไม่ระบุ');
     setText('modal-deadline', job.deadline || 'ไม่ระบุ');
     setText('modal-contact', job.contact_info || job.application_channel || '-');
 
+    // 🔧 แก้บั๊ก: อวตารบริษัทไม่เคยถูกอัปเดตเลย ค้างเป็น "-" สีฟ้าเดิมทุกครั้งไม่ว่าจะเป็นบริษัทไหน
+    const avatarEl = document.getElementById('modal-avatar');
+    if (avatarEl) {
+        const avatar = getCompanyAvatar(job.company_name);
+        avatarEl.innerText = avatar.initial;
+        avatarEl.style.background = avatar.color;
+    }
+
+    const closed = isJobClosed(job.status);
     const statusBadge = document.getElementById('modal-badge-status');
     if (statusBadge) {
-        statusBadge.innerText = isClosed ? '🔴 ปิดรับสมัครแล้ว' : '🟢 เปิดรับสมัครอยู่';
-        statusBadge.className = `inline-block px-3 py-0.5 rounded-full text-[11px] font-semibold mb-2 ${isClosed ? 'bg-rose-500 text-white' : 'bg-emerald-500 text-white'}`;
+        statusBadge.innerHTML = `<span class="dot" style="background:${closed ? '#fb7185' : '#34d399'};"></span>${closed ? 'ปิดรับสมัครแล้ว' : 'เปิดรับสมัครอยู่'}`;
     }
 
     const applyBtn = document.getElementById('modal-apply-btn');
@@ -250,5 +238,5 @@ function openJobDetailModal(job) {
 }
 
 function closeJobDetailModal() {
-    document.getElementById('job-detail-modal').classList.add('hidden');
+    document.getElementById('job-detail-modal')?.classList.add('hidden');
 }
