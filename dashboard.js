@@ -49,7 +49,7 @@ function setupRealtimeSubscription() {
 async function fetchDashboardJobs() {
     const tbody = document.getElementById('job-list-body');
     try {
-        const { data, error } = await supabaseClient.from('cwie_jobs').select('*').order('id', { ascending: true });
+        const { data, error } = await supabaseClient.from('cwie_jobs').select('*').order('id', { ascending: false });
         if (error) throw error;
         allJobs = data || [];
         filteredJobs = [...allJobs];
