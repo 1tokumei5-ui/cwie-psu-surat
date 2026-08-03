@@ -115,7 +115,7 @@ async function fetchCurrentJobs() {
         const { data, error } = await supabaseClient
             .from('cwie_jobs')
             .select('*')
-            .order('id', { ascending: true });
+            .order('id', { ascending: false });
 
         if (error) throw error;
 
