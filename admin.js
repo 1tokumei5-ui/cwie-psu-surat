@@ -1,19 +1,29 @@
+/* ============================================================
+   CWIE PSU Surat Thani — Admin panel logic (admin.js)
+   ต้องโหลดหลัง shared-utils.js เสมอ (ใช้ escapeHtml, isJobClosed,
+   statusPillHtml, getCompanyAvatar, loadingRowHtml, emptyRowHtml,
+   skeletonRowsHtml, debounce, renderPagination จากไฟล์นั้น)
+   ============================================================ */
+
 let globalJobsList = [];
+let currentJobsFiltered = [];
+let currentJobsPage = 1;
+const CURRENT_JOBS_PAGE_SIZE = 8;
+
+// ไอคอน SVG เส้นบาง ใช้แทนอิโมจิ ✏️🗑️⬇ ในปุ่มของตาราง
+const ROW_ICONS = {
+    edit: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
+    trash: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>',
+    download: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>',
+    search: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>'
+};
 
 document.addEventListener('DOMContentLoaded', () => {
     checkAuthSession();
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeAdminJobModal();
+    });
 });
-
-// 🔒 helper: กัน XSS — แปลงข้อความให้ปลอดภัยก่อนแทรกลงใน innerHTML
-function escapeHtml(str) {
-    if (str === null || str === undefined) return '';
-    return String(str)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
 
 async function checkAuthSession() {
     const loginModal = document.getElementById('login-modal');
@@ -21,7 +31,6 @@ async function checkAuthSession() {
     const btnLogout = document.getElementById('btn-logout');
 
     if (typeof supabaseClient === 'undefined') {
-        // ไม่มีการเชื่อมต่อ Supabase เลย — ปลอดภัยไว้ก่อน ไม่แสดงพาเนล
         if (loginModal) loginModal.style.display = 'flex';
         if (panel) panel.style.display = 'none';
         return;
@@ -31,7 +40,6 @@ async function checkAuthSession() {
         const { data: { session } } = await supabaseClient.auth.getSession();
 
         if (session) {
-            // ✅ ล็อกอินแล้ว: ซ่อน modal, แสดงพาเนล, โหลดข้อมูล
             if (loginModal) loginModal.style.display = 'none';
             if (panel) panel.style.display = 'block';
             if (btnLogout) btnLogout.style.display = 'inline-flex';
@@ -39,14 +47,12 @@ async function checkAuthSession() {
             fetchCurrentJobs();
             loadUploadHistory();
         } else {
-            // 🔐 ยังไม่ล็อกอิน: บังคับแสดง modal และซ่อนพาเนลทั้งหมด
             if (loginModal) loginModal.style.display = 'flex';
             if (panel) panel.style.display = 'none';
             if (btnLogout) btnLogout.style.display = 'none';
         }
     } catch (err) {
         console.warn("Auth Check Warning:", err);
-        // เกิดข้อผิดพลาดในการตรวจสอบ session — ปลอดภัยไว้ก่อน บังคับให้ล็อกอินใหม่
         if (loginModal) loginModal.style.display = 'flex';
         if (panel) panel.style.display = 'none';
     }
@@ -60,7 +66,7 @@ async function loginAdmin() {
 
     if (!email || !password) {
         if (errorEl) {
-            errorEl.innerText = '❌ กรุณากรอกอีเมลและรหัสผ่านให้ครบถ้วน';
+            errorEl.innerText = 'กรุณากรอกอีเมลและรหัสผ่านให้ครบถ้วน';
             errorEl.style.display = 'block';
         }
         return;
@@ -70,16 +76,11 @@ async function loginAdmin() {
         const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
-        Swal.fire({
-            icon: 'success',
-            title: 'เข้าสู่ระบบสำเร็จ!',
-            timer: 1200,
-            showConfirmButton: false
-        });
+        Swal.fire({ icon: 'success', title: 'เข้าสู่ระบบสำเร็จ!', timer: 1200, showConfirmButton: false });
         setTimeout(() => { location.reload(); }, 1200);
     } catch (err) {
         if (errorEl) {
-            errorEl.innerText = `❌ ${err.message}`;
+            errorEl.innerText = err.message;
             errorEl.style.display = 'block';
         }
     }
@@ -92,16 +93,22 @@ async function logoutAdmin() {
     location.reload();
 }
 
+/* ============================================================
+   ตาราง "ข้อมูลประกาศงานในระบบปัจจุบัน" — ดึงข้อมูล + ค้นหา + แบ่งหน้า + ส่งออก
+   (เดิมตารางนี้ไม่มีทั้งช่องค้นหาและการแบ่งหน้าเลย โหลดมาแสดงทั้งหมดทีเดียว
+   พอข้อมูลเยอะขึ้นจะเลื่อนหาแถวที่ต้องการยากและหน้าเว็บหนักขึ้นเรื่อยๆ)
+   ============================================================ */
 async function fetchCurrentJobs() {
     const tbody = document.getElementById('current-jobs-body');
     const totalCountEl = document.getElementById('stat-total-jobs');
     const lastUpdateEl = document.getElementById('stat-last-update');
-
     if (!tbody) return;
+
+    tbody.innerHTML = skeletonRowsHtml(7, 4);
 
     try {
         if (typeof supabaseClient === 'undefined') {
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-amber-600">⚠️ ยังไม่ได้เชื่อมต่อ Supabase</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-amber-600">ยังไม่ได้เชื่อมต่อ Supabase</td></tr>`;
             return;
         }
 
@@ -111,53 +118,132 @@ async function fetchCurrentJobs() {
             .order('id', { ascending: true });
 
         if (error) throw error;
+
         globalJobsList = data || [];
+        currentJobsFiltered = [...globalJobsList];
+        currentJobsPage = 1;
 
         if (totalCountEl) totalCountEl.innerText = `${globalJobsList.length} รายการ`;
         if (globalJobsList.length > 0 && lastUpdateEl) {
             lastUpdateEl.innerText = new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
         }
 
-        if (globalJobsList.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-slate-400">📭 ไม่พบข้อมูลในระบบ</td></tr>`;
-            return;
-        }
-
-        tbody.innerHTML = '';
-        globalJobsList.forEach(job => {
-            const isClosed = job.status === 'ปิดรับสมัครแล้ว' || job.status === 'ปิดรับสมัคร' || job.status === 'ปิด';
-            const statusBadge = isClosed
-                ? `<span style="background: #fee2e2; color: #dc2626; padding: 3px 8px; border-radius: 12px; font-weight: 600; white-space: nowrap;">🔴 ปิดรับสมัคร</span>`
-                : `<span style="background: #dcfce7; color: #15803d; padding: 3px 8px; border-radius: 12px; font-weight: 600; white-space: nowrap;">🟢 เปิดรับสมัคร</span>`;
-
-            const tr = document.createElement('tr');
-            // 🔒 ใช้ escapeHtml กับข้อมูลทุกช่องที่มาจากผู้ใช้/ไฟล์ที่อัปโหลด
-            tr.innerHTML = `
-                <td style="font-weight: 600;">${escapeHtml(job.id)}</td>
-                <td><b>${escapeHtml(job.company_name) || '-'}</b></td>
-                <td style="color: #003566; font-weight: 500;">${escapeHtml(job.position_title) || '-'}</td>
-                <td>${escapeHtml(job.location) || '-'}</td>
-                <td style="color: #059669; font-weight: 600;">${escapeHtml(job.salary) || 'ไม่ระบุ'}</td>
-                <td>${statusBadge}</td>
-                <td style="text-align: center; white-space: nowrap;">
-                    <button onclick="openEditJobModalById('${escapeHtml(job.id)}')" class="px-2 py-1 bg-amber-50 text-amber-600 rounded-lg hover:bg-amber-100 font-medium text-xs">✏️ แก้ไข</button>
-                    <button onclick="deleteJob('${escapeHtml(job.id)}')" class="px-2 py-1 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 font-medium text-xs">🗑️ ลบ</button>
-                </td>
-            `;
-            tbody.appendChild(tr);
-        });
+        renderCurrentJobsTable();
     } catch (err) {
         tbody.innerHTML = `<tr><td colspan="7" class="text-center p-6 text-rose-500">เกิดข้อผิดพลาด: ${escapeHtml(err.message)}</td></tr>`;
     }
 }
 
+// ช่องค้นหาใหม่ในตาราง "ข้อมูลในระบบปัจจุบัน" — ค้นบริษัท/ตำแหน่ง/สถานที่พร้อมกัน
+const filterCurrentJobsTable = debounce(() => {
+    const q = document.getElementById('current-jobs-search')?.value.toLowerCase().trim() || '';
+    currentJobsFiltered = globalJobsList.filter(job =>
+        (job.company_name || '').toLowerCase().includes(q) ||
+        (job.position_title || '').toLowerCase().includes(q) ||
+        (job.location || '').toLowerCase().includes(q)
+    );
+    currentJobsPage = 1;
+    renderCurrentJobsTable();
+}, 200);
+
+function renderCurrentJobsTable() {
+    const tbody = document.getElementById('current-jobs-body');
+    const infoEl = document.getElementById('current-jobs-pagination-info');
+    const pagerEl = document.getElementById('current-jobs-pagination');
+    if (!tbody) return;
+
+    if (globalJobsList.length === 0) {
+        tbody.innerHTML = emptyRowHtml(7, 'ไม่พบข้อมูลในระบบ');
+        if (infoEl) infoEl.innerText = '';
+        if (pagerEl) pagerEl.innerHTML = '';
+        return;
+    }
+    if (currentJobsFiltered.length === 0) {
+        tbody.innerHTML = emptyRowHtml(7, 'ไม่พบรายการที่ตรงกับคำค้นหา');
+        if (infoEl) infoEl.innerText = '';
+        if (pagerEl) pagerEl.innerHTML = '';
+        return;
+    }
+
+    const totalItems = currentJobsFiltered.length;
+    const totalPages = Math.ceil(totalItems / CURRENT_JOBS_PAGE_SIZE) || 1;
+    if (currentJobsPage > totalPages) currentJobsPage = totalPages;
+    const start = (currentJobsPage - 1) * CURRENT_JOBS_PAGE_SIZE;
+    const end = Math.min(start + CURRENT_JOBS_PAGE_SIZE, totalItems);
+    const pageItems = currentJobsFiltered.slice(start, end);
+
+    if (infoEl) infoEl.innerText = `แสดง ${start + 1} - ${end} จากทั้งหมด ${totalItems.toLocaleString()} รายการ`;
+
+    tbody.innerHTML = '';
+    pageItems.forEach(job => {
+        const avatar = getCompanyAvatar(job.company_name);
+        const tr = document.createElement('tr');
+        // 🔒 ใช้ escapeHtml กับข้อมูลทุกช่องที่มาจากผู้ใช้/ไฟล์ที่อัปโหลด
+        tr.innerHTML = `
+            <td style="font-weight: 600;">${escapeHtml(job.id)}</td>
+            <td>
+                <div class="company-cell">
+                    <div class="company-avatar" style="width:28px;height:28px;font-size:11px;background:${avatar.color};">${escapeHtml(avatar.initial)}</div>
+                    <b>${escapeHtml(job.company_name) || '-'}</b>
+                </div>
+            </td>
+            <td style="color: var(--psu-deep); font-weight: 500;">${escapeHtml(job.position_title) || '-'}</td>
+            <td>${escapeHtml(job.location) || '-'}</td>
+            <td style="color: var(--status-open); font-weight: 600;">${escapeHtml(job.salary) || 'ไม่ระบุ'}</td>
+            <td>${statusPillHtml(job.status)}</td>
+            <td style="text-align: center; white-space: nowrap;">
+                <button onclick="openEditJobModalById('${escapeHtml(job.id)}')" class="btn-edit-sm icon-btn">${ROW_ICONS.edit} แก้ไข</button>
+                <button onclick="deleteJob('${escapeHtml(job.id)}')" class="btn-delete-sm icon-btn">${ROW_ICONS.trash} ลบ</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    renderPagination(pagerEl, {
+        currentPage: currentJobsPage,
+        totalPages,
+        onChange: (p) => { currentJobsPage = p; renderCurrentJobsTable(); }
+    });
+}
+
+// 🆕 ส่งออกข้อมูลงานทั้งหมดในระบบเป็นไฟล์ Excel (.xlsx) — ใช้ไลบรารี XLSX ที่โหลดไว้อยู่แล้ว
+// ไม่ต้องเพิ่ม dependency ใหม่ เหมาะสำหรับเจ้าหน้าที่ที่ต้องการก็อปข้อมูลไปทำรายงาน/ส่งต่อ
+function exportCurrentJobsToExcel() {
+    if (!globalJobsList.length) {
+        Swal.fire('แจ้งเตือน', 'ไม่มีข้อมูลให้ส่งออก', 'warning');
+        return;
+    }
+    try {
+        const rows = globalJobsList.map(job => ({
+            'ID': job.id,
+            'บริษัท/หน่วยงาน': job.company_name || '-',
+            'ตำแหน่งงาน/ทุน': job.position_title || '-',
+            'ประเภทงาน': job.job_type || '-',
+            'สถานที่': job.location || '-',
+            'รูปแบบงาน': job.work_format || '-',
+            'เงินเดือน/เบี้ยเลี้ยง': job.salary || '-',
+            'โควต้า': job.quota || '-',
+            'วันปิดรับสมัคร': job.deadline || '-',
+            'สถานะ': job.status || '-',
+            'ช่องทางสมัคร/ติดต่อ': job.application_channel || job.contact_info || '-'
+        }));
+        const ws = XLSX.utils.json_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'CWIE Jobs');
+        const dateTag = new Date().toISOString().slice(0, 10);
+        XLSX.writeFile(wb, `cwie-jobs-${dateTag}.xlsx`);
+    } catch (err) {
+        Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถสร้างไฟล์ส่งออกได้: ' + err.message, 'error');
+    }
+}
+
 function openAddJobModal() {
     const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
-    
+
     setVal('form-job-id', '');
     const titleEl = document.getElementById('form-modal-title');
-    if (titleEl) titleEl.innerText = '➕ เพิ่มประกาศงานใหม่';
-    
+    if (titleEl) titleEl.innerText = 'เพิ่มประกาศงานใหม่';
+
     setVal('form-company', '');
     setVal('form-position', '');
     setVal('form-location', '');
@@ -166,12 +252,12 @@ function openAddJobModal() {
     setVal('form-quota', '');
     setVal('form-job-type', 'สหกิจศึกษา');
     setVal('form-status', 'เปิดรับสมัครอยู่');
+    setVal('form-deadline', '');
     setVal('form-contact', '');
 
     const modal = document.getElementById('admin-job-modal');
-    if (modal) {
-        modal.style.display = 'flex';
-    }
+    if (modal) modal.style.display = 'flex';
+    document.getElementById('form-company')?.focus();
 }
 
 function openEditJobModalById(id) {
@@ -186,7 +272,7 @@ function openEditJobModalById(id) {
 
     setVal('form-job-id', job.id);
     const titleEl = document.getElementById('form-modal-title');
-    if (titleEl) titleEl.innerText = '✏️ แก้ไขประกาศงาน';
+    if (titleEl) titleEl.innerText = 'แก้ไขประกาศงาน';
 
     setVal('form-company', job.company_name || '');
     setVal('form-position', job.position_title || '');
@@ -196,19 +282,18 @@ function openEditJobModalById(id) {
     setVal('form-quota', job.quota || '');
     setVal('form-job-type', job.job_type || 'สหกิจศึกษา');
     setVal('form-status', job.status || 'เปิดรับสมัครอยู่');
+    // 🔧 แก้บั๊ก: เดิมฟอร์มนี้ไม่มีช่อง deadline เลย ทำให้เปิดแก้งานที่นำเข้าจาก Excel
+    // (ซึ่งมีวันปิดรับสมัครอยู่แล้ว) แล้วกด "บันทึกข้อมูล" จะไม่ส่งค่า deadline ไปด้วยเลย
+    setVal('form-deadline', job.deadline && job.deadline !== 'ไม่ระบุ' ? job.deadline : '');
     setVal('form-contact', job.application_channel || job.contact_info || '');
 
     const modal = document.getElementById('admin-job-modal');
-    if (modal) {
-        modal.style.display = 'flex';
-    }
+    if (modal) modal.style.display = 'flex';
 }
 
 function closeAdminJobModal() {
     const modal = document.getElementById('admin-job-modal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
+    if (modal) modal.style.display = 'none';
 }
 
 // 🔧 ดึงอีเมลของแอดมินที่ล็อกอินอยู่ (ใช้ร่วมกันทั้งตอนอัปโหลด Excel และเพิ่ม/แก้ไขงานด้วยมือ)
@@ -257,6 +342,20 @@ async function saveJobManual() {
         return;
     }
 
+    const contact = getVal('form-contact');
+    if (contact && !/^https?:\/\//i.test(contact) && !contact.includes('@') && !/^[0-9+\-() ]{6,}$/.test(contact)) {
+        // 🔧 ตรวจแบบผ่อนปรน: เตือนเฉยๆ ไม่บล็อกการบันทึก เผื่อแอดมินตั้งใจใส่ข้อความอธิบายแทนลิงก์/เบอร์/อีเมลจริงๆ
+        const confirmResult = await Swal.fire({
+            icon: 'question',
+            title: 'ช่องติดต่อดูไม่เหมือนลิงก์ เบอร์โทร หรืออีเมล',
+            text: 'ต้องการบันทึกข้อมูลนี้ต่อหรือไม่?',
+            showCancelButton: true,
+            confirmButtonText: 'บันทึกต่อ',
+            cancelButtonText: 'กลับไปแก้ไข'
+        });
+        if (!confirmResult.isConfirmed) return;
+    }
+
     const payload = {
         company_name: company,
         position_title: position,
@@ -266,8 +365,9 @@ async function saveJobManual() {
         quota: getVal('form-quota') || 'ไม่ระบุ',
         job_type: getVal('form-job-type') || 'สหกิจศึกษา',
         status: getVal('form-status') || 'เปิดรับสมัครอยู่',
-        application_channel: getVal('form-contact'),
-        contact_info: getVal('form-contact')
+        deadline: getVal('form-deadline') || 'ไม่ระบุ',
+        application_channel: contact,
+        contact_info: contact
     };
 
     try {
@@ -283,20 +383,14 @@ async function saveJobManual() {
 
         if (error) throw error;
 
-        // 🔧 บันทึกลงประวัติด้วย เพื่อให้เห็นการเพิ่ม/แก้ไขด้วยมือในตารางประวัติเดียวกัน
         const logLabel = isEdit
-            ? `✏️ แก้ไขงานด้วยตนเอง: ${company} - ${position}`
-            : `➕ เพิ่มงานด้วยตนเอง: ${company} - ${position}`;
+            ? `แก้ไขงานด้วยตนเอง: ${company} - ${position}`
+            : `เพิ่มงานด้วยตนเอง: ${company} - ${position}`;
         const logOk = await logHistoryEntry(logLabel, 1);
 
         closeAdminJobModal();
         if (logOk) {
-            Swal.fire({
-                icon: 'success',
-                title: 'บันทึกข้อมูลสำเร็จ!',
-                timer: 1500,
-                showConfirmButton: false
-            });
+            Swal.fire({ icon: 'success', title: 'บันทึกข้อมูลสำเร็จ!', timer: 1500, showConfirmButton: false });
         } else {
             Swal.fire({
                 icon: 'warning',
@@ -335,9 +429,8 @@ async function deleteJob(id) {
 }
 
 async function deleteAllJobs() {
-    // 🔒 action ทำลายล้าง — ต้องพิมพ์ยืนยันคำว่า "ลบทั้งหมด" ก่อน ป้องกันกดพลาด
     const result = await Swal.fire({
-        title: '⚠️ ล้างข้อมูลทั้งหมด?',
+        title: 'ล้างข้อมูลทั้งหมด?',
         html: 'ข้อมูลประกาศงานทั้งหมดจะถูกลบออกจากระบบอย่างถาวร!<br>พิมพ์ <b>ลบทั้งหมด</b> เพื่อยืนยัน',
         icon: 'warning',
         input: 'text',
@@ -357,7 +450,11 @@ async function deleteAllJobs() {
 
     if (result.isConfirmed) {
         try {
-            const { error } = await supabaseClient.from('cwie_jobs').delete().neq('id', 0);
+            // 🔧 แก้บั๊ก: เดิมใช้ .neq('id', 0) ซึ่งสมมติว่าคอลัมน์ id เป็นตัวเลขเสมอ
+            // ถ้าตาราง cwie_jobs ใช้ id เป็น UUID จริง คำสั่งนี้จะพังทันที (เทียบคอลัมน์
+            // uuid กับเลข 0 ไม่ได้) — เปลี่ยนเป็นเงื่อนไข "id ไม่เป็นค่าว่าง" ซึ่งใช้ได้
+            // ทั้งกับ id แบบตัวเลขและ UUID เหมือนกัน
+            const { error } = await supabaseClient.from('cwie_jobs').delete().not('id', 'is', null);
             if (error) throw error;
             Swal.fire({ icon: 'success', title: 'ล้างข้อมูลสำเร็จ', timer: 1200, showConfirmButton: false });
             fetchCurrentJobs();
@@ -377,33 +474,53 @@ let uploadedFileName = '';
 // G=สถานที่, H=รูปแบบงาน, I=ค่าตอบแทน, J=ระยะเวลา(ไม่ใช้), K=วันปิดรับสมัคร, L=สถานะประกาศ,
 // M=ช่องทางสมัคร, N=ผู้ติดต่อ, O=แหล่งที่มา(ไม่ใช้), P=วันที่ดึงข้อมูล(ไม่ใช้), Q=ข้อสังเกต(ไม่ใช้)
 // ถ้าเทมเพลตไฟล์เปลี่ยน แก้เลขคอลัมน์ตรงนี้ที่เดียวพอ
+//
+// ⚠️ ข้อจำกัดที่ทราบอยู่: เทมเพลตนี้ไม่มีคอลัมน์ระบุ "ประเภทงาน" (สหกิจ/ฝึกงาน/รับเข้าทำงาน)
+// ทุกแถวที่นำเข้าจาก Excel จึงถูกตั้งเป็น "สหกิจศึกษา" เสมอ (ดูตัวแปร job_type ด้านล่าง)
+// ถ้าไฟล์จริงมีคอลัมน์นี้อยู่ ให้เพิ่ม job_type: N ในอ็อบเจ็กต์นี้แล้วอ่านค่าแทนการ hardcode
 const EXCEL_COLUMNS = {
-    company_name: 1,          // คอลัมน์ B — ชื่อบริษัท/หน่วยงาน
-    position_title: 2,        // คอลัมน์ C — ตำแหน่งงาน/ทุนที่รับสมัคร
-    quota: 3,                  // คอลัมน์ D — จำนวนที่รับ (อัตรา)
-    location: 6,               // คอลัมน์ G — สถานที่ปฏิบัติงาน
-    work_format: 7,            // คอลัมน์ H — รูปแบบงาน
-    salary: 8,                 // คอลัมน์ I — ค่าตอบแทน/สวัสดิการ
-    deadline: 10,               // คอลัมน์ K — วันปิดรับสมัคร
-    status: 11,                 // คอลัมน์ L — สถานะประกาศ
-    application_channel: 12,   // คอลัมน์ M — ช่องทางการสมัคร
-    contact_info: 13           // คอลัมน์ N — ผู้ติดต่อ/เบอร์โทร/อีเมล
+    company_name: 1,
+    position_title: 2,
+    quota: 3,
+    location: 6,
+    work_format: 7,
+    salary: 8,
+    deadline: 10,
+    status: 11,
+    application_channel: 12,
+    contact_info: 13
 };
 
-// ค่าที่พบได้บ่อยในไฟล์ที่หมายถึง "ปิดรับสมัครแล้ว" — ใช้จับคู่แบบไม่สนตัวพิมพ์เล็ก/ใหญ่
-const CLOSED_STATUS_VALUES = ['ปิดรับสมัครแล้ว', 'ปิดรับสมัคร', 'ปิด', 'closed', 'close'];
+// ค่าที่พบได้บ่อยในไฟล์ Excel ที่นำเข้า ซึ่งหมายถึง "ปิดรับสมัครแล้ว" (กว้างกว่า CLOSED_STATUS_SET
+// ใน shared-utils.js ซึ่งใช้เทียบแบบตรงเป๊ะสำหรับแสดงผลเท่านั้น — ตรงนี้ต้องทนทานต่อไฟล์ที่พิมพ์มาไม่เป๊ะ)
+const IMPORT_CLOSED_KEYWORDS = [...CLOSED_STATUS_SET, 'closed', 'close'];
 
 function normalizeStatusValue(raw) {
     const val = String(raw || '').trim();
     if (!val) return 'เปิดรับสมัครอยู่';
     const normalized = val.toLowerCase();
-    // 🔧 ต้องเช็คคำว่า "เปิด" (คำเต็ม) ก่อนเสมอ เพราะคำว่า "ปิด" เป็นส่วนหนึ่งของคำว่า
+    // ต้องเช็คคำว่า "เปิด" (คำเต็ม) ก่อนเสมอ เพราะคำว่า "ปิด" เป็นส่วนหนึ่งของคำว่า
     // "เปิด" อยู่แล้ว (เ + ปิด) ถ้าเช็คแค่ "ปิด" อย่างเดียวจะจับ "เปิดรับสมัครอยู่" ผิดว่าปิดไปด้วย
     if (normalized.includes('เปิด') || normalized.includes('open')) {
         return 'เปิดรับสมัครอยู่';
     }
-    const isClosed = CLOSED_STATUS_VALUES.some(c => normalized.includes(c.toLowerCase()));
+    const isClosed = IMPORT_CLOSED_KEYWORDS.some(c => normalized.includes(c.toLowerCase()));
     return isClosed ? 'ปิดรับสมัครแล้ว' : 'เปิดรับสมัครอยู่';
+}
+
+// 🆕 หาแผ่นงาน (sheet) ที่มีจำนวนแถวมากที่สุดในไฟล์ แทนที่จะเชื่อว่าแผ่นแรกคือแผ่นข้อมูลเสมอ
+// (กันปัญหาไฟล์ที่มีแผ่นปกหรือคำอธิบายเป็นแผ่นแรก แล้วข้อมูลจริงอยู่แผ่นถัดไป)
+function pickBestSheet(workbook) {
+    let bestName = workbook.SheetNames[0];
+    let bestCount = -1;
+    workbook.SheetNames.forEach(name => {
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1 });
+        if (rows.length > bestCount) {
+            bestCount = rows.length;
+            bestName = name;
+        }
+    });
+    return bestName;
 }
 
 async function handleFileUpload() {
@@ -419,9 +536,18 @@ async function handleFileUpload() {
     reader.onload = async function (e) {
         try {
             const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, { type: 'array' });
-            const firstSheetName = workbook.SheetNames[0];
-            const worksheet = workbook.Sheets[firstSheetName];
+            // 🔧 แก้บั๊ก: เพิ่ม cellDates: true — ถ้าไม่ใส่ตรงนี้ เซลล์ที่ผู้ใช้จัดรูปแบบเป็น
+            // "วันที่" จริงในโปรแกรม Excel (ไม่ใช่พิมพ์เป็นข้อความ) จะถูกอ่านออกมาเป็นเลขลำดับ
+            // วันของ Excel (เช่น 45678) แทนที่จะเป็นวันที่อ่านรู้เรื่อง กระทบคอลัมน์ K (วันปิดรับสมัคร)
+            const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+            if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+                Swal.fire('แจ้งเตือน', 'ไฟล์นี้ไม่มีแผ่นงาน (sheet) ที่อ่านได้', 'warning');
+                return;
+            }
+
+            // 🆕 เลือกแผ่นงานที่มีข้อมูลมากที่สุด กันกรณีแผ่นแรกเป็นหน้าปก/คำอธิบายเปล่าๆ
+            const sheetName = pickBestSheet(workbook);
+            const worksheet = workbook.Sheets[sheetName];
             const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
             if (json.length < 2) {
@@ -429,11 +555,22 @@ async function handleFileUpload() {
                 return;
             }
 
-            // 🔧 อ่านข้อมูลตามตำแหน่งคอลัมน์ตายตัวที่กำหนดไว้ใน EXCEL_COLUMNS ด้านบน
             const getCell = (row, idx, fallback) => {
                 if (idx === undefined) return fallback;
                 const val = row[idx];
-                return (val === undefined || val === null || val === '') ? fallback : String(val);
+                if (val === undefined || val === null || val === '') return fallback;
+                // แปลงวันที่ที่ XLSX แปลงเป็น JS Date ให้แล้ว (เพราะ cellDates:true) ให้อ่านง่าย
+                if (val instanceof Date && !isNaN(val)) {
+                    return val.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
+                }
+                // 🆕 ถ้าเซลล์เป็นตัวเลขล้วน (เช่น เงินเดือนที่พิมพ์เป็นตัวเลขไม่ใช่ข้อความ) จัดรูปแบบ
+                // ใส่จุลภาคคั่นหลักพันให้อ่านง่าย แทนที่จะโชว์ตัวเลขดิบๆ ติดกันยาวๆ
+                if (typeof val === 'number') {
+                    return val.toLocaleString('en-US', { maximumFractionDigits: 2 });
+                }
+                // 🆕 ตัดช่องว่างหัว-ท้ายทิ้ง กันปัญหาช่องว่างแฝงที่มองไม่เห็น (เช่นตัวกรองสถานที่บน
+                // Dashboard จะเทียบสตริงแบบตรงเป๊ะ ถ้ามีช่องว่างติดมาจะกลายเป็นคนละค่ากับที่ตั้งใจ)
+                return String(val).trim();
             };
 
             parsedExcelData = [];
@@ -465,10 +602,24 @@ async function handleFileUpload() {
                 return;
             }
 
+            // 🆕 เช็กแบบคร่าวๆ (ไม่บล็อก แค่เตือน): ถ้านำเข้าได้น้อยกว่าครึ่งของแถวทั้งหมดในไฟล์
+            // มักแปลว่าตำแหน่งคอลัมน์ในไฟล์ไม่ตรงกับ EXCEL_COLUMNS ด้านบน ควรแจ้งให้ผู้ใช้ทราบ
+            const totalDataRows = json.length - 1;
+            if (totalDataRows > 0 && parsedExcelData.length < totalDataRows * 0.5) {
+                Swal.fire({
+                    icon: 'info',
+                    title: 'อ่านข้อมูลได้ไม่ครบตามคาด',
+                    text: `ไฟล์นี้มี ${totalDataRows} แถว แต่นำเข้าได้เพียง ${parsedExcelData.length} แถว อาจเป็นเพราะตำแหน่งคอลัมน์ในไฟล์ไม่ตรงกับเทมเพลตที่ระบบรองรับ กรุณาตรวจสอบข้อมูลในตารางพรีวิวด้านล่างก่อนกด "บันทึกเข้าระบบ"`
+                });
+            }
+
             renderPreviewTable(parsedExcelData);
         } catch (err) {
             Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถอ่านไฟล์ Excel ได้: ' + err.message, 'error');
         }
+    };
+    reader.onerror = function () {
+        Swal.fire('เกิดข้อผิดพลาด', 'ไม่สามารถเปิดอ่านไฟล์นี้ได้ ไฟล์อาจเสียหายหรือถูกล็อกอยู่', 'error');
     };
     reader.readAsArrayBuffer(file);
 }
@@ -484,26 +635,26 @@ function renderPreviewTable(data) {
     tbody.innerHTML = '';
 
     data.forEach(item => {
-        const isClosed = item.status === 'ปิดรับสมัครแล้ว';
-        const statusBadge = isClosed
-            ? `<span style="background: #fee2e2; color: #dc2626; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">🔴 ปิดรับสมัคร</span>`
-            : `<span style="background: #dcfce7; color: #15803d; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">🟢 เปิดรับสมัคร</span>`;
-
+        const avatar = getCompanyAvatar(item.company_name);
         const tr = document.createElement('tr');
         // 🔒 escape ข้อมูลจากไฟล์ที่อัปโหลดก่อนแสดงในตารางพรีวิว
         tr.innerHTML = `
-            <td><b>${escapeHtml(item.company_name)}</b></td>
-            <td><span style="color: #003566; font-weight: 500;">${escapeHtml(item.position_title)}</span></td>
+            <td>
+                <div class="company-cell">
+                    <div class="company-avatar" style="width:26px;height:26px;font-size:10.5px;background:${avatar.color};">${escapeHtml(avatar.initial)}</div>
+                    <b>${escapeHtml(item.company_name)}</b>
+                </div>
+            </td>
+            <td><span style="color: var(--psu-deep); font-weight: 500;">${escapeHtml(item.position_title)}</span></td>
             <td>${escapeHtml(item.location)}</td>
-            <td style="color: #059669; font-weight: 600;">${escapeHtml(item.salary)}</td>
+            <td style="color: var(--status-open); font-weight: 600;">${escapeHtml(item.salary)}</td>
             <td style="font-size: 11px; color: #64748b;">${escapeHtml(item.application_channel)}</td>
-            <td>${statusBadge}</td>
+            <td>${statusPillHtml(item.status)}</td>
         `;
         tbody.appendChild(tr);
     });
 }
 
-// 🎯 ปรับปรุงการบันทึกประวัติการอัปโหลดให้ซิงก์อีเมลและแสดงผลทันที
 async function syncToDatabase() {
     if (parsedExcelData.length === 0) {
         Swal.fire('แจ้งเตือน', 'ไม่มีข้อมูลสำหรับซิงก์', 'warning');
@@ -511,17 +662,12 @@ async function syncToDatabase() {
     }
 
     try {
-        // 1. บันทึกข้อมูลประกาศงานลง cwie_jobs
         const { error: jobErr } = await supabaseClient.from('cwie_jobs').insert(parsedExcelData);
         if (jobErr) throw jobErr;
 
-        // 2. บันทึกประวัติลง cwie_logs (ใช้ helper ร่วมกับ manual add/edit)
         const logOk = await logHistoryEntry(uploadedFileName || 'Excel_Import.xlsx', parsedExcelData.length);
 
         if (!logOk) {
-            // 🔧 แจ้งผู้ใช้ตรงๆ แทนการซ่อน error ไว้ใน console — งานถูกบันทึกแล้ว
-            // แต่ประวัติการอัปโหลดบันทึกไม่สำเร็จ ผู้ใช้จะได้รู้และไปตรวจสอบ
-            // ตาราง cwie_logs / RLS policy ได้ทันที
             Swal.fire({
                 icon: 'warning',
                 title: 'บันทึกข้อมูลงานสำเร็จ แต่บันทึกประวัติล้มเหลว',
@@ -537,7 +683,6 @@ async function syncToDatabase() {
             });
         }
 
-        // 3. เคลียร์พรีวิวและโหลดตารางใหม่ทันที
         document.getElementById('preview-section').style.display = 'none';
         parsedExcelData = [];
         const fileInput = document.getElementById('excel-file');
@@ -551,10 +696,10 @@ async function syncToDatabase() {
     }
 }
 
-// 🎯 โหลดตารางประวัติการอัปโหลด
 async function loadUploadHistory() {
     const historyBody = document.getElementById('history-body');
     if (!historyBody) return;
+    historyBody.innerHTML = skeletonRowsHtml(6, 3);
 
     try {
         if (typeof supabaseClient === 'undefined') return;
@@ -568,7 +713,7 @@ async function loadUploadHistory() {
         const logs = data || [];
 
         if (logs.length === 0) {
-            historyBody.innerHTML = `<tr><td colspan="6" class="text-center p-4 text-slate-400">📭 ยังไม่มีประวัติการอัปโหลด</td></tr>`;
+            historyBody.innerHTML = emptyRowHtml(6, 'ยังไม่มีประวัติการอัปโหลด');
             return;
         }
 
@@ -576,24 +721,18 @@ async function loadUploadHistory() {
         logs.forEach(log => {
             const dateObj = log.uploaded_at ? new Date(log.uploaded_at) : new Date();
             const dateStr = dateObj.toLocaleString('th-TH', {
-                year: 'numeric',
-                month: 'numeric',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit'
+                year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
 
             const tr = document.createElement('tr');
-            // 🔒 escape ชื่อไฟล์และผู้ดำเนินการก่อนแสดงผล
             tr.innerHTML = `
                 <td>${escapeHtml(dateStr)}</td>
                 <td><b>${escapeHtml(log.filename) || 'Excel Import'}</b></td>
-                <td><span style="background: #e0f2fe; color: #0369a1; padding: 2px 8px; border-radius: 12px; font-weight: 600;">${escapeHtml(log.record_count) || 0} รายการ</span></td>
+                <td><span class="badge-count">${escapeHtml(log.record_count) || 0} รายการ</span></td>
                 <td>${escapeHtml(log.uploaded_by) || 'Admin'}</td>
-                <td><span style="background: #dcfce7; color: #15803d; padding: 2px 8px; border-radius: 12px; font-weight: 600;">สำเร็จ</span></td>
+                <td><span class="status-pill status-pill--open"><span class="dot"></span>สำเร็จ</span></td>
                 <td style="text-align: center;">
-                    <button onclick="deleteLog(${Number(log.id)})" class="text-rose-500 hover:text-rose-700 font-bold transition-colors px-2 py-1">🗑️</button>
+                    <button onclick="deleteLog(${Number(log.id)})" class="btn-delete-sm icon-btn" aria-label="ลบประวัตินี้">${ROW_ICONS.trash}</button>
                 </td>
             `;
             historyBody.appendChild(tr);
@@ -624,7 +763,9 @@ async function clearUploadHistory() {
 
     if (result.isConfirmed) {
         try {
-            await supabaseClient.from('cwie_logs').delete().neq('id', 0);
+            // 🔧 แก้บั๊กเดียวกับ deleteAllJobs(): เปลี่ยนจาก .neq('id', 0) เป็นเงื่อนไข
+            // ที่ใช้ได้ทั้งกับ id แบบตัวเลขและ UUID
+            await supabaseClient.from('cwie_logs').delete().not('id', 'is', null);
             loadUploadHistory();
             Swal.fire({ icon: 'success', title: 'ล้างประวัติสำเร็จ', timer: 1000, showConfirmButton: false });
         } catch (err) { console.warn(err); }
