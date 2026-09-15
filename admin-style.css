@@ -1,5 +1,5 @@
 /* ============================================================
-   CWIE PSU Surat Thani — Admin panel styles
+   CWIE PSU Surat Thani — Admin panel styles  v2.1
    หมายเหตุ: ตัวแปรสี/ฟอนต์ทั้งหมดย้ายไปอยู่ที่ theme.css แล้ว
    ไฟล์นี้ต้องถูกโหลด "หลัง" theme.css เสมอ (ดู <link> ใน admin.html)
    ============================================================ */
@@ -148,7 +148,7 @@ body {
     justify-content: center;
     flex-shrink: 0;
 }
-.stat-icon-bg.is-open { background: var(--status-open-bg); color: var(--status-open); }
+.stat-icon-bg.is-open   { background: var(--status-open-bg);   color: var(--status-open); }
 .stat-icon-bg.is-closed { background: var(--status-closed-bg); color: var(--status-closed); }
 
 .stat-label {
@@ -188,17 +188,6 @@ body {
     color: var(--ink-muted);
     margin-top: 12px;
     margin-bottom: 0;
-}
-
-.badge-count {
-    background: var(--psu-sky-soft);
-    color: var(--psu-sky);
-    font-size: 12px;
-    font-weight: 600;
-    padding: 4px 12px;
-    border-radius: 20px;
-    border: 1px solid #bae6fd;
-    font-family: var(--font-heading);
 }
 
 /* ⌨️ Inputs & Buttons */
@@ -275,9 +264,6 @@ body {
     transform: translateY(-1px);
 }
 
-/* 🔧 เพิ่มใหม่: เดิมปุ่มเหล่านี้ใช้ style="background: #0284c7" / "#002855" ฝังในบรรทัด HTML
-   โดยตรง (magic hex values) แยกจากระบบ class อื่นทั้งหมด — ทำให้แก้สีธีมทีเดียวไม่ครบทุกจุด
-   ย้ายมาเป็น class ที่นี่ที่เดียว ใช้ตัวแปรสีร่วมจาก theme.css */
 .btn-accent-action, .btn-primary-action, .btn-warn-pastel {
     display: inline-flex;
     align-items: center;
@@ -358,6 +344,7 @@ body {
     top: 0;
     z-index: 10;
     font-family: var(--font-heading);
+    white-space: nowrap; /* 👈 บังคับไม่ให้หัวตารางตกบรรทัด */
 }
 
 .preview-table td {
@@ -424,9 +411,6 @@ body {
 .login-banner-left {
     width: 45%;
     background: linear-gradient(135deg, var(--psu-deep) 0%, #021530 100%);
-    /* 🖼️ ตำแหน่งใส่รูป #4 (ทางเลือก): ถ้ามีภาพถ่ายอาคาร/บรรยากาศ ม.อ. สุราษฎร์ธานีจริง
-       ใส่เป็น background-image ตรงนี้ (เช่น background-image: url('campus.jpg'); background-size: cover; background-position: center;)
-       แล้วคง gradient เดิมทับด้วย opacity ~75% เพื่อให้ตัวหนังสือสีขาวอ่านง่าย */
     padding: 48px 40px;
     color: #ffffff;
     display: flex;
