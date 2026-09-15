@@ -1,8 +1,6 @@
 /* ============================================================
-   CWIE PSU Surat Thani — Admin panel logic (admin.js)
-   ต้องโหลดหลัง shared-utils.js เสมอ (ใช้ escapeHtml, isJobClosed,
-   statusPillHtml, getCompanyAvatar, loadingRowHtml, emptyRowHtml,
-   skeletonRowsHtml, debounce, renderPagination จากไฟล์นั้น)
+   CWIE PSU Surat Thani — Admin panel logic (admin.js) v2.2 (Auto-Detect Columns)
+   ต้องโหลดหลัง shared-utils.js เสมอ
    ============================================================ */
 
 let globalJobsList = [];
@@ -10,7 +8,6 @@ let currentJobsFiltered = [];
 let currentJobsPage = 1;
 const CURRENT_JOBS_PAGE_SIZE = 8;
 
-// ไอคอน SVG เส้นบาง ใช้แทนอิโมจิ ✏️🗑️⬇ ในปุ่มของตาราง
 const ROW_ICONS = {
     edit: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>',
     trash: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>',
@@ -93,11 +90,6 @@ async function logoutAdmin() {
     location.reload();
 }
 
-/* ============================================================
-   ตาราง "ข้อมูลประกาศงานในระบบปัจจุบัน" — ดึงข้อมูล + ค้นหา + แบ่งหน้า + ส่งออก
-   (เดิมตารางนี้ไม่มีทั้งช่องค้นหาและการแบ่งหน้าเลย โหลดมาแสดงทั้งหมดทีเดียว
-   พอข้อมูลเยอะขึ้นจะเลื่อนหาแถวที่ต้องการยากและหน้าเว็บหนักขึ้นเรื่อยๆ)
-   ============================================================ */
 async function fetchCurrentJobs() {
     const tbody = document.getElementById('current-jobs-body');
     const totalCountEl = document.getElementById('stat-total-jobs');
@@ -134,7 +126,6 @@ async function fetchCurrentJobs() {
     }
 }
 
-// ช่องค้นหาใหม่ในตาราง "ข้อมูลในระบบปัจจุบัน" — ค้นบริษัท/ตำแหน่ง/สถานที่พร้อมกัน
 const filterCurrentJobsTable = debounce(() => {
     const q = document.getElementById('current-jobs-search')?.value.toLowerCase().trim() || '';
     currentJobsFiltered = globalJobsList.filter(job =>
@@ -178,7 +169,6 @@ function renderCurrentJobsTable() {
     pageItems.forEach(job => {
         const avatar = getCompanyAvatar(job.company_name);
         const tr = document.createElement('tr');
-        // 🔒 ใช้ escapeHtml กับข้อมูลทุกช่องที่มาจากผู้ใช้/ไฟล์ที่อัปโหลด
         tr.innerHTML = `
             <td style="font-weight: 600;">${escapeHtml(job.id)}</td>
             <td>
@@ -206,8 +196,6 @@ function renderCurrentJobsTable() {
     });
 }
 
-// 🆕 ส่งออกข้อมูลงานทั้งหมดในระบบเป็นไฟล์ Excel (.xlsx) — ใช้ไลบรารี XLSX ที่โหลดไว้อยู่แล้ว
-// ไม่ต้องเพิ่ม dependency ใหม่ เหมาะสำหรับเจ้าหน้าที่ที่ต้องการก็อปข้อมูลไปทำรายงาน/ส่งต่อ
 function exportCurrentJobsToExcel() {
     if (!globalJobsList.length) {
         Swal.fire('แจ้งเตือน', 'ไม่มีข้อมูลให้ส่งออก', 'warning');
@@ -261,7 +249,6 @@ function openAddJobModal() {
 }
 
 function openEditJobModalById(id) {
-    // เทียบแบบ string เพื่อรองรับทั้ง id ที่เป็นตัวเลข (int/bigint) และ UUID
     const job = globalJobsList.find(j => String(j.id) === String(id));
     if (!job) {
         console.warn('ไม่พบรายการงานที่มี id:', id);
@@ -282,8 +269,6 @@ function openEditJobModalById(id) {
     setVal('form-quota', job.quota || '');
     setVal('form-job-type', job.job_type || 'สหกิจศึกษา');
     setVal('form-status', job.status || 'เปิดรับสมัครอยู่');
-    // 🔧 แก้บั๊ก: เดิมฟอร์มนี้ไม่มีช่อง deadline เลย ทำให้เปิดแก้งานที่นำเข้าจาก Excel
-    // (ซึ่งมีวันปิดรับสมัครอยู่แล้ว) แล้วกด "บันทึกข้อมูล" จะไม่ส่งค่า deadline ไปด้วยเลย
     setVal('form-deadline', job.deadline && job.deadline !== 'ไม่ระบุ' ? job.deadline : '');
     setVal('form-contact', job.application_channel || job.contact_info || '');
 
@@ -296,7 +281,6 @@ function closeAdminJobModal() {
     if (modal) modal.style.display = 'none';
 }
 
-// 🔧 ดึงอีเมลของแอดมินที่ล็อกอินอยู่ (ใช้ร่วมกันทั้งตอนอัปโหลด Excel และเพิ่ม/แก้ไขงานด้วยมือ)
 async function getCurrentUserEmail() {
     try {
         const { data: { session } } = await supabaseClient.auth.getSession();
@@ -309,7 +293,6 @@ async function getCurrentUserEmail() {
     return 'Admin';
 }
 
-// 🔧 บันทึกรายการลงประวัติ (ใช้ร่วมกันทั้งอัปโหลด Excel และเพิ่ม/แก้ไขงานด้วยมือ)
 async function logHistoryEntry(filename, recordCount) {
     try {
         const currentUserEmail = await getCurrentUserEmail();
@@ -344,7 +327,6 @@ async function saveJobManual() {
 
     const contact = getVal('form-contact');
     if (contact && !/^https?:\/\//i.test(contact) && !contact.includes('@') && !/^[0-9+\-() ]{6,}$/.test(contact)) {
-        // 🔧 ตรวจแบบผ่อนปรน: เตือนเฉยๆ ไม่บล็อกการบันทึก เผื่อแอดมินตั้งใจใส่ข้อความอธิบายแทนลิงก์/เบอร์/อีเมลจริงๆ
         const confirmResult = await Swal.fire({
             icon: 'question',
             title: 'ช่องติดต่อดูไม่เหมือนลิงก์ เบอร์โทร หรืออีเมล',
@@ -383,23 +365,9 @@ async function saveJobManual() {
 
         if (error) throw error;
 
-        const logLabel = isEdit
-            ? `แก้ไขงานด้วยตนเอง: ${company} - ${position}`
-            : `เพิ่มงานด้วยตนเอง: ${company} - ${position}`;
-        const logOk = await logHistoryEntry(logLabel, 1);
-
+        Swal.fire({ icon: 'success', title: 'บันทึกข้อมูลสำเร็จ', timer: 1200, showConfirmButton: false });
         closeAdminJobModal();
-        if (logOk) {
-            Swal.fire({ icon: 'success', title: 'บันทึกข้อมูลสำเร็จ!', timer: 1500, showConfirmButton: false });
-        } else {
-            Swal.fire({
-                icon: 'warning',
-                title: 'บันทึกข้อมูลงานสำเร็จ แต่บันทึกประวัติล้มเหลว',
-                text: 'ข้อมูลงานถูกบันทึกเรียบร้อยแล้ว แต่ไม่สามารถบันทึกลงประวัติได้',
-            });
-        }
         fetchCurrentJobs();
-        loadUploadHistory();
     } catch (err) {
         Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
     }
@@ -450,10 +418,6 @@ async function deleteAllJobs() {
 
     if (result.isConfirmed) {
         try {
-            // 🔧 แก้บั๊ก: เดิมใช้ .neq('id', 0) ซึ่งสมมติว่าคอลัมน์ id เป็นตัวเลขเสมอ
-            // ถ้าตาราง cwie_jobs ใช้ id เป็น UUID จริง คำสั่งนี้จะพังทันที (เทียบคอลัมน์
-            // uuid กับเลข 0 ไม่ได้) — เปลี่ยนเป็นเงื่อนไข "id ไม่เป็นค่าว่าง" ซึ่งใช้ได้
-            // ทั้งกับ id แบบตัวเลขและ UUID เหมือนกัน
             const { error } = await supabaseClient.from('cwie_jobs').delete().not('id', 'is', null);
             if (error) throw error;
             Swal.fire({ icon: 'success', title: 'ล้างข้อมูลสำเร็จ', timer: 1200, showConfirmButton: false });
@@ -466,41 +430,40 @@ async function deleteAllJobs() {
 
 let parsedExcelData = [];
 let uploadedFileName = '';
+const IMPORT_CLOSED_KEYWORDS = [...(typeof CLOSED_STATUS_SET !== 'undefined' ? CLOSED_STATUS_SET : []), 'closed', 'close'];
 
-// 🔧 ตำแหน่งคอลัมน์ในไฟล์ Excel (นับจาก 0 = คอลัมน์ A, 1 = คอลัมน์ B, 2 = คอลัมน์ C, ...)
-// แถวแรกของไฟล์ต้องเป็นหัวตาราง (header) แล้วข้อมูลเริ่มจากแถวที่ 2 เป็นต้นไป
-// โครงสร้างนี้ตรงกับไฟล์เทมเพลต Cwie-2026.xlsx:
-// A=ลำดับ(ไม่ใช้), B=บริษัท, C=ตำแหน่ง, D=จำนวนที่รับ, E=คุณสมบัติ(ไม่ใช้), F=ลักษณะงาน(ไม่ใช้),
-// G=สถานที่, H=รูปแบบงาน, I=ค่าตอบแทน, J=ระยะเวลา(ไม่ใช้), K=วันปิดรับสมัคร, L=สถานะประกาศ,
-// M=ช่องทางสมัคร, N=ผู้ติดต่อ, O=แหล่งที่มา(ไม่ใช้), P=วันที่ดึงข้อมูล(ไม่ใช้), Q=ข้อสังเกต(ไม่ใช้)
-// ถ้าเทมเพลตไฟล์เปลี่ยน แก้เลขคอลัมน์ตรงนี้ที่เดียวพอ
-//
-// ⚠️ ข้อจำกัดที่ทราบอยู่: เทมเพลตนี้ไม่มีคอลัมน์ระบุ "ประเภทงาน" (สหกิจ/ฝึกงาน/รับเข้าทำงาน)
-// ทุกแถวที่นำเข้าจาก Excel จึงถูกตั้งเป็น "สหกิจศึกษา" เสมอ (ดูตัวแปร job_type ด้านล่าง)
-// ถ้าไฟล์จริงมีคอลัมน์นี้อยู่ ให้เพิ่ม job_type: N ในอ็อบเจ็กต์นี้แล้วอ่านค่าแทนการ hardcode
-const EXCEL_COLUMNS = {
-    company_name: 1,
-    position_title: 2,
-    quota: 3,
-    location: 6,
-    work_format: 7,
-    salary: 8,
-    deadline: 10,
-    status: 11,
-    application_channel: 12,
-    contact_info: 13
-};
+function detectExcelColumns(headerRow) {
+    const cols = {
+        company_name: 1, position_title: 2, quota: 3, location: 4, 
+        work_format: 5, salary: 6, deadline: 7, status: 8, 
+        application_channel: 9, contact_info: 10
+    };
 
-// ค่าที่พบได้บ่อยในไฟล์ Excel ที่นำเข้า ซึ่งหมายถึง "ปิดรับสมัครแล้ว" (กว้างกว่า CLOSED_STATUS_SET
-// ใน shared-utils.js ซึ่งใช้เทียบแบบตรงเป๊ะสำหรับแสดงผลเท่านั้น — ตรงนี้ต้องทนทานต่อไฟล์ที่พิมพ์มาไม่เป๊ะ)
-const IMPORT_CLOSED_KEYWORDS = [...CLOSED_STATUS_SET, 'closed', 'close'];
+    if (!headerRow || headerRow.length === 0) return cols;
+
+    headerRow.forEach((rawName, index) => {
+        const name = String(rawName || '').toLowerCase().replace(/\s+/g, '');
+        
+        if (name.includes('บริษัท') || name.includes('หน่วยงาน') || name.includes('ประกอบการ')) cols.company_name = index;
+        else if (name.includes('ตำแหน่ง') || name.includes('ชื่องาน')) cols.position_title = index;
+        else if (name.includes('จำนวน') || name.includes('อัตรา')) cols.quota = index;
+        else if (name.includes('สถานที่') || name.includes('จังหวัด') || name.includes('ปฏิบัติงาน')) cols.location = index;
+        else if (name.includes('รูปแบบ')) cols.work_format = index;
+        else if (name.includes('เงินเดือน') || name.includes('เบี้ยเลี้ยง') || name.includes('ค่าตอบแทน') || name.includes('รายได้') || name.includes('ทุน')) cols.salary = index;
+        else if (name.includes('ปิดรับ') || name.includes('กำหนด') || name.includes('วันที่')) cols.deadline = index;
+        else if (name.includes('สถานะ')) cols.status = index;
+        else if (name.includes('ช่องทาง') || name.includes('ลิงก์') || name.includes('สมัคร') || name.includes('ฟอร์ม')) cols.application_channel = index;
+        else if (name.includes('ติดต่อ') || name.includes('เบอร์') || name.includes('โทร') || name.includes('อีเมล') || name.includes('email')) cols.contact_info = index;
+    });
+
+    return cols;
+}
 
 function normalizeStatusValue(raw) {
     const val = String(raw || '').trim();
     if (!val) return 'เปิดรับสมัครอยู่';
     const normalized = val.toLowerCase();
-    // ต้องเช็คคำว่า "เปิด" (คำเต็ม) ก่อนเสมอ เพราะคำว่า "ปิด" เป็นส่วนหนึ่งของคำว่า
-    // "เปิด" อยู่แล้ว (เ + ปิด) ถ้าเช็คแค่ "ปิด" อย่างเดียวจะจับ "เปิดรับสมัครอยู่" ผิดว่าปิดไปด้วย
+    
     if (normalized.includes('เปิด') || normalized.includes('open')) {
         return 'เปิดรับสมัครอยู่';
     }
@@ -508,8 +471,6 @@ function normalizeStatusValue(raw) {
     return isClosed ? 'ปิดรับสมัครแล้ว' : 'เปิดรับสมัครอยู่';
 }
 
-// 🆕 หาแผ่นงาน (sheet) ที่มีจำนวนแถวมากที่สุดในไฟล์ แทนที่จะเชื่อว่าแผ่นแรกคือแผ่นข้อมูลเสมอ
-// (กันปัญหาไฟล์ที่มีแผ่นปกหรือคำอธิบายเป็นแผ่นแรก แล้วข้อมูลจริงอยู่แผ่นถัดไป)
 function pickBestSheet(workbook) {
     let bestName = workbook.SheetNames[0];
     let bestCount = -1;
@@ -521,6 +482,15 @@ function pickBestSheet(workbook) {
         }
     });
     return bestName;
+}
+
+function formatThaiPhone(val) {
+    if (!val || val === '-') return val;
+    let str = String(val).trim();
+    if (/^[1-9]\d{7,8}$/.test(str)) {
+        return '0' + str;
+    }
+    return str;
 }
 
 async function handleFileUpload() {
@@ -536,16 +506,12 @@ async function handleFileUpload() {
     reader.onload = async function (e) {
         try {
             const data = new Uint8Array(e.target.result);
-            // 🔧 แก้บั๊ก: เพิ่ม cellDates: true — ถ้าไม่ใส่ตรงนี้ เซลล์ที่ผู้ใช้จัดรูปแบบเป็น
-            // "วันที่" จริงในโปรแกรม Excel (ไม่ใช่พิมพ์เป็นข้อความ) จะถูกอ่านออกมาเป็นเลขลำดับ
-            // วันของ Excel (เช่น 45678) แทนที่จะเป็นวันที่อ่านรู้เรื่อง กระทบคอลัมน์ K (วันปิดรับสมัคร)
             const workbook = XLSX.read(data, { type: 'array', cellDates: true });
             if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
                 Swal.fire('แจ้งเตือน', 'ไฟล์นี้ไม่มีแผ่นงาน (sheet) ที่อ่านได้', 'warning');
                 return;
             }
 
-            // 🆕 เลือกแผ่นงานที่มีข้อมูลมากที่สุด กันกรณีแผ่นแรกเป็นหน้าปก/คำอธิบายเปล่าๆ
             const sheetName = pickBestSheet(workbook);
             const worksheet = workbook.Sheets[sheetName];
             const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
@@ -555,21 +521,19 @@ async function handleFileUpload() {
                 return;
             }
 
+            const EXCEL_COLUMNS = detectExcelColumns(json[0]);
+
             const getCell = (row, idx, fallback) => {
                 if (idx === undefined) return fallback;
                 const val = row[idx];
                 if (val === undefined || val === null || val === '') return fallback;
-                // แปลงวันที่ที่ XLSX แปลงเป็น JS Date ให้แล้ว (เพราะ cellDates:true) ให้อ่านง่าย
+                
                 if (val instanceof Date && !isNaN(val)) {
                     return val.toLocaleDateString('th-TH', { year: 'numeric', month: 'short', day: 'numeric' });
                 }
-                // 🆕 ถ้าเซลล์เป็นตัวเลขล้วน (เช่น เงินเดือนที่พิมพ์เป็นตัวเลขไม่ใช่ข้อความ) จัดรูปแบบ
-                // ใส่จุลภาคคั่นหลักพันให้อ่านง่าย แทนที่จะโชว์ตัวเลขดิบๆ ติดกันยาวๆ
                 if (typeof val === 'number') {
                     return val.toLocaleString('en-US', { maximumFractionDigits: 2 });
                 }
-                // 🆕 ตัดช่องว่างหัว-ท้ายทิ้ง กันปัญหาช่องว่างแฝงที่มองไม่เห็น (เช่นตัวกรองสถานที่บน
-                // Dashboard จะเทียบสตริงแบบตรงเป๊ะ ถ้ามีช่องว่างติดมาจะกลายเป็นคนละค่ากับที่ตั้งใจ)
                 return String(val).trim();
             };
 
@@ -592,25 +556,14 @@ async function handleFileUpload() {
                     deadline: getCell(row, EXCEL_COLUMNS.deadline, 'ไม่ระบุ'),
                     status: normalizeStatusValue(getCell(row, EXCEL_COLUMNS.status, '')),
                     application_channel: getCell(row, EXCEL_COLUMNS.application_channel, '-'),
-                    contact_info: getCell(row, EXCEL_COLUMNS.contact_info, '-'),
+                    contact_info: formatThaiPhone(getCell(row, EXCEL_COLUMNS.contact_info, '-')),
                     job_type: 'สหกิจศึกษา'
                 });
             }
 
             if (parsedExcelData.length === 0) {
-                Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูลที่นำเข้าได้ในไฟล์นี้ กรุณาตรวจสอบว่าคอลัมน์บริษัท (B) และตำแหน่ง (C) มีข้อมูลอยู่', 'warning');
+                Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูลที่นำเข้าได้ในไฟล์นี้ กรุณาตรวจสอบว่าคอลัมน์บริษัท และตำแหน่ง มีข้อมูลอยู่', 'warning');
                 return;
-            }
-
-            // 🆕 เช็กแบบคร่าวๆ (ไม่บล็อก แค่เตือน): ถ้านำเข้าได้น้อยกว่าครึ่งของแถวทั้งหมดในไฟล์
-            // มักแปลว่าตำแหน่งคอลัมน์ในไฟล์ไม่ตรงกับ EXCEL_COLUMNS ด้านบน ควรแจ้งให้ผู้ใช้ทราบ
-            const totalDataRows = json.length - 1;
-            if (totalDataRows > 0 && parsedExcelData.length < totalDataRows * 0.5) {
-                Swal.fire({
-                    icon: 'info',
-                    title: 'อ่านข้อมูลได้ไม่ครบตามคาด',
-                    text: `ไฟล์นี้มี ${totalDataRows} แถว แต่นำเข้าได้เพียง ${parsedExcelData.length} แถว อาจเป็นเพราะตำแหน่งคอลัมน์ในไฟล์ไม่ตรงกับเทมเพลตที่ระบบรองรับ กรุณาตรวจสอบข้อมูลในตารางพรีวิวด้านล่างก่อนกด "บันทึกเข้าระบบ"`
-                });
             }
 
             renderPreviewTable(parsedExcelData);
@@ -631,13 +584,12 @@ function renderPreviewTable(data) {
     if (!section || !tbody) return;
 
     section.style.display = 'block';
-    badge.innerText = `${data.length} รายการ`;
+    if (badge) badge.innerText = `${data.length} รายการ`;
     tbody.innerHTML = '';
 
     data.forEach(item => {
         const avatar = getCompanyAvatar(item.company_name);
         const tr = document.createElement('tr');
-        // 🔒 escape ข้อมูลจากไฟล์ที่อัปโหลดก่อนแสดงในตารางพรีวิว
         tr.innerHTML = `
             <td>
                 <div class="company-cell">
@@ -656,34 +608,61 @@ function renderPreviewTable(data) {
 }
 
 async function syncToDatabase() {
-    if (parsedExcelData.length === 0) {
-        Swal.fire('แจ้งเตือน', 'ไม่มีข้อมูลสำหรับซิงก์', 'warning');
+    if (!parsedExcelData || parsedExcelData.length === 0) {
+        Swal.fire('แจ้งเตือน', 'ไม่มีข้อมูลสำหรับซิงก์ กรุณาอัปโหลดไฟล์ Excel ก่อน', 'warning');
         return;
     }
 
+    const recordCount = parsedExcelData.length;
+    const cleanPayload = parsedExcelData.map(item => ({
+        company_name: String(item.company_name || '-').trim(),
+        position_title: String(item.position_title || '-').trim(),
+        quota: String(item.quota || 'ไม่ระบุ').trim(),
+        location: String(item.location || 'ไม่ระบุ').trim(),
+        work_format: String(item.work_format || 'Onsite').trim(),
+        salary: String(item.salary || 'ตามตกลง').trim(),
+        deadline: String(item.deadline || 'ไม่ระบุ').trim(),
+        status: String(item.status || 'เปิดรับสมัครอยู่').trim(),
+        application_channel: String(item.application_channel || '-').trim(),
+        contact_info: String(item.contact_info || '-').trim(),
+        job_type: String(item.job_type || 'สหกิจศึกษา').trim()
+    }));
+
     try {
-        const { error: jobErr } = await supabaseClient.from('cwie_jobs').insert(parsedExcelData);
+        Swal.fire({
+            title: 'กำลังบันทึกข้อมูล...',
+            text: 'กรุณารอสักครู่ ระบบกำลังส่งข้อมูลไปยังฐานข้อมูล',
+            allowOutsideClick: false,
+            didOpen: () => { Swal.showLoading(); }
+        });
+
+        const { error: jobErr } = await supabaseClient
+            .from('cwie_jobs')
+            .insert(cleanPayload);
+
         if (jobErr) throw jobErr;
 
-        const logOk = await logHistoryEntry(uploadedFileName || 'Excel_Import.xlsx', parsedExcelData.length);
+        const logOk = await logHistoryEntry(uploadedFileName || 'Excel_Import.xlsx', recordCount);
 
         if (!logOk) {
             Swal.fire({
                 icon: 'warning',
                 title: 'บันทึกข้อมูลงานสำเร็จ แต่บันทึกประวัติล้มเหลว',
-                text: `นำเข้าประกาศงาน ${parsedExcelData.length} รายการสำเร็จ แต่ไม่สามารถบันทึกลงประวัติการอัปโหลดได้`,
+                text: `นำเข้าประกาศงาน ${recordCount} รายการสำเร็จ แต่ไม่สามารถบันทึกลงประวัติการอัปโหลดได้`,
             });
         } else {
             Swal.fire({
                 icon: 'success',
                 title: 'บันทึกข้อมูลเข้าระบบสำเร็จ!',
-                text: `นำเข้าประกาศงานจำนวน ${parsedExcelData.length} รายการเรียบร้อยแล้ว`,
+                text: `นำเข้าประกาศงานจำนวน ${recordCount} รายการเรียบร้อยแล้ว`,
                 timer: 2000,
                 showConfirmButton: false
             });
         }
 
-        document.getElementById('preview-section').style.display = 'none';
+        const previewSec = document.getElementById('preview-section');
+        if (previewSec) previewSec.style.display = 'none';
+        
         parsedExcelData = [];
         const fileInput = document.getElementById('excel-file');
         if (fileInput) fileInput.value = '';
@@ -692,7 +671,12 @@ async function syncToDatabase() {
         await loadUploadHistory();
 
     } catch (err) {
-        Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
+        console.error('Supabase Sync Error:', err);
+        Swal.fire({
+            icon: 'error',
+            title: 'เกิดข้อผิดพลาดในการบันทึกข้อมูล',
+            text: err.message || 'ไม่สามารถบันทึกข้อมูลลงฐานข้อมูลได้'
+        });
     }
 }
 
@@ -754,7 +738,7 @@ async function clearUploadHistory() {
     const result = await Swal.fire({
         title: 'ยืนยันการล้างประวัติ?',
         text: 'ประวัติการอัปโหลดทั้งหมดจะถูกลบออก',
-        icon: 'warning',
+        icon: 'warning',    
         showCancelButton: true,
         confirmButtonText: 'ล้างประวัติ',
         cancelButtonText: 'ยกเลิก',
@@ -763,11 +747,11 @@ async function clearUploadHistory() {
 
     if (result.isConfirmed) {
         try {
-            // 🔧 แก้บั๊กเดียวกับ deleteAllJobs(): เปลี่ยนจาก .neq('id', 0) เป็นเงื่อนไข
-            // ที่ใช้ได้ทั้งกับ id แบบตัวเลขและ UUID
             await supabaseClient.from('cwie_logs').delete().not('id', 'is', null);
             loadUploadHistory();
             Swal.fire({ icon: 'success', title: 'ล้างประวัติสำเร็จ', timer: 1000, showConfirmButton: false });
-        } catch (err) { console.warn(err); }
+        } catch (err) {
+            Swal.fire('เกิดข้อผิดพลาด', err.message, 'error');
+        }
     }
 }
